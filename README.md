@@ -13,7 +13,9 @@ dengan tap nama di HP itu; data dipegang admin perusahaan.
 ## Teknologi
 
 Kotlin + Jetpack Compose (Material 3 Expressive) + Room. minSdk 26.
-Build lewat GitHub Actions (`workflow_dispatch`).
+R8 aktif di release (minify + shrinkResources). Dependabot mingguan
+(Senin 03:00 WIB, gradle + github-actions). Unit test logika absensi
+dijalankan di CI. Build lewat GitHub Actions (`workflow_dispatch`).
 
 ## Status
 

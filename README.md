@@ -1,33 +1,25 @@
 # Absensi
 
-Aplikasi absensi karyawan untuk perusahaan. **Satu HP di kantor** — karyawan absen
-dengan tap nama di HP itu; data dipegang admin perusahaan.
+Employee attendance app for a company. **One shared phone at the office** — employees check in by tapping their name on that phone; the company admin holds the data.
 
-- Absen masuk & pulang (tap nama), terlambat dihitung otomatis dari jam kerja
-- Shift 1 08.00–15.00, shift 2 16.00–22.00 (toleransi terlambat 15 menit)
-- Izin / sakit / cuti (dicatat admin)
-- Rekap bulanan per karyawan + persentase kehadiran
-- Menu Rekap, Karyawan, dan Lainnya dikunci PIN admin (4 digit)
-- Desain: R1 Kaca Aurora (gelap + aurora + kaca)
+- Check in & check out (tap a name); lateness is calculated automatically from working hours
+- Shift 1 08:00–15:00, shift 2 16:00–22:00 (15-minute late tolerance)
+- Leave / sick / day off (recorded by the admin)
+- Monthly recap per employee + attendance percentage
+- Rekap, Karyawan, and Lainnya menus are locked behind an admin PIN (4 digits)
+- Design: R1 Kaca Aurora (dark + aurora + glass)
 
-## Teknologi
+## Tech stack
 
-Kotlin + Jetpack Compose (Material 3 Expressive) + Room. minSdk 26.
-R8 aktif di release (minify + shrinkResources). Dependabot mingguan
-(Senin 03:00 WIB, gradle + github-actions). Unit test logika absensi
-dijalankan di CI. Build lewat GitHub Actions (`workflow_dispatch`).
+Kotlin + Jetpack Compose (Material 3 Expressive) + Room. Package `id.absensi.app`, v1.0.0, minSdk 26.
+R8 is enabled in release builds (minify + shrinkResources). Weekly Dependabot updates (Mondays 03:00 WIB, gradle + github-actions). Attendance-logic unit tests run in CI. Builds run on GitHub Actions (`workflow_dispatch`).
 
 ## Status
 
-v1.0.0 — kerangka awal: layar Absen, Karyawan, Rekap, Lainnya + PIN admin.
-Belum ada: ekspor Excel, backup cloud (Firebase), mode terang/gelap.
+v1.0.0 — initial scaffold: Absen, Karyawan, Rekap, and Lainnya screens + admin PIN.
+Not yet available: Excel export, cloud backup (Firebase), light/dark mode.
 
-## Build lokal
+## Build
 
-Buka folder repo di Android Studio, jalankan dari terminal:
-
-```
-./gradlew assembleDebug
-```
-
-APK debug ada di `app/build/outputs/apk/debug/app-debug.apk`.
+- **CI:** Actions → Build Absensi → Run workflow (branch `main`). Artifacts: `Absensi-Debug` and `Absensi-Release-Unsigned` (the release APK is unsigned for now — no keystore yet).
+- **Local:** open the project in Android Studio and press Run. (This repo has no Gradle wrapper yet; local builds go through Android Studio.)

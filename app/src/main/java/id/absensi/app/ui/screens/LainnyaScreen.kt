@@ -50,8 +50,7 @@ fun LainnyaScreen(
     repo: Repository,
     toleransiMenit: Int,
     onToleransiSimpan: (Int) -> Unit,
-    pembaruanOtomatis: InfoPembaruan? = null,
-    onKelolaLibur: () -> Unit
+    pembaruanOtomatis: InfoPembaruan? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -124,13 +123,6 @@ fun LainnyaScreen(
                         onToleransiSimpan(toleransiTeks.toIntOrNull()?.coerceIn(0, 120) ?: 15)
                     }) { Text("Simpan") }
                 }
-            }
-        }
-        KacaCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(text = "Hari Libur", fontWeight = FontWeight.Bold)
-                Text(text = "Tanggal merah tidak dihitung sebagai hari kerja — karyawan tidak ditandai Alpa.")
-                Button(onClick = onKelolaLibur) { Text("Kelola Hari Libur") }
             }
         }
         KacaCard(Modifier.fillMaxWidth()) {

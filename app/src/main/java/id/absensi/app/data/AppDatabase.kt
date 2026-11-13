@@ -13,8 +13,6 @@ import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Update
-import androidx.room.migration.Migration
-import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlin.jvm.Volatile
 
 @Entity(tableName = "karyawan")
@@ -69,14 +67,6 @@ data class IzinEntity(
     val tanggal: String,
     /** IZIN, SAKIT, atau CUTI */
     val jenis: String,
-    val keterangan: String = "",
-    val dibuat: Long = System.currentTimeMillis()
-)
-
-@Entity(tableName = "libur")
-data class LiburEntity(
-    /** yyyy-MM-dd */
-    @PrimaryKey val tanggal: String,
     val keterangan: String = "",
     val dibuat: Long = System.currentTimeMillis()
 )
@@ -144,43 +134,15 @@ interface IzinDao {
     suspend fun hapus(kid: Long, tanggal: String)
 }
 
-@Dao
-interface LiburDao {
-    @Query("SELECT * FROM libur ORDER BY tanggal ASC")
-    suspend fun semua(): List<LiburEntity>
-
-    @Query("SELECT * FROM libur WHERE tanggal LIKE :prefix || '%' ORDER BY tanggal ASC")
-    suspend fun byBulan(prefix: String): List<LiburEntity>
-
-    @Query("SELECT * FROM libur WHERE tanggal = :tanggal")
-    suspend fun byTanggal(tanggal: String): LiburEntity?
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(e: LiburEntity)
-
-    @Query("DELETE FROM libur WHERE tanggal = :tanggal")
-    suspend fun hapus(tanggal: String)
-}
-
-val MIGRATION_1_2 = object : Migration(1, 2) {
-    override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL(
-            "CREATE TABLE IF NOT EXISTS `libur` " +
-                "(`tanggal` TEXT NOT NULL, `keterangan` TEXT NOT NULL, PRIMARY KEY(`tanggal`))"
-        )
-    }
-}
-
 @Database(
-    entities = [KaryawanEntity::class, AbsensiEntity::class, IzinEntity::class, LiburEntity::class],
-    version = 2,
+    entities = [KaryawanEntity::class, AbsensiEntity::class, IzinEntity::class],
+    version = 1,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun karyawanDao(): KaryawanDao
     abstract fun absensiDao(): AbsensiDao
     abstract fun izinDao(): IzinDao
-    abstract fun liburDao(): LiburDao
 }
 
 object DatabaseProvider {
@@ -193,7 +155,7 @@ object DatabaseProvider {
                 context.applicationContext,
                 AppDatabase::class.java,
                 "absensi.db"
-            ).addMigrations(MIGRATION_1_2).fallbackToDestructiveMigration().build().also { instance = it }
+            ).fallbackToDestructiveMigration().build().also { instance = it }
         }
     }
 

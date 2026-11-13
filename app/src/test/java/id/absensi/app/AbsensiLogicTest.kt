@@ -95,16 +95,6 @@ class AbsensiLogicTest {
         assertEquals(null, parseJamMenit("08.05.00"))
     }
 
-    @Test
-    fun hariKerjaBulan_liburDikecualikan() {
-        // 17 Nov 2026 = Selasa; libur 1 hari -> 21 - 1 = 20.
-        val hari = hariKerjaBulan("2026-11", LocalDate.of(2026, 11, 30), setOf("2026-11-17"))
-        assertEquals(20, hari.size)
-        // Libur di akhir pekan tidak mengubah jumlah.
-        val hari2 = hariKerjaBulan("2026-11", LocalDate.of(2026, 11, 30), setOf("2026-11-07"))
-        assertEquals(21, hari2.size)
-    }
-
     private fun karyawanTes() = KaryawanEntity(id = 1, nama = "Budi", jabatan = "Staff", shift = "SHIFT_1")
 
     private fun absensiTes() = listOf(
@@ -129,16 +119,5 @@ class AbsensiLogicTest {
         assertEquals(StatusHadir.HADIR, baris[3].status)
         assertEquals(900, baris[3].pulangMenit)
         assertEquals(StatusHadir.ALPA, baris[4].status)
-    }
-
-    @Test
-    fun barisRiwayat_liburDikecualikan() {
-        val baris = barisRiwayat(
-            karyawanTes(), absensiTes(), izinTes(), "2026-11",
-            LocalDate.of(2026, 11, 6), 15, setOf("2026-11-06")
-        )
-        // 6 Nov libur -> hanya 4 baris, tidak ada ALPA.
-        assertEquals(4, baris.size)
-        assertEquals("2026-11-05", baris[3].tanggal)
     }
 }

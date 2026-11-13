@@ -145,20 +145,6 @@ class Repository(private val db: AppDatabase) {
         }
     }
 
-    // ---- Hari libur (S4) ----
-
-    suspend fun daftarLibur(): List<LiburEntity> = db.liburDao().semua()
-
-    suspend fun tambahLibur(tanggal: String, keterangan: String = "") {
-        require(tanggal.isNotBlank()) { "Tanggal tidak boleh kosong" }
-        db.liburDao().insert(LiburEntity(tanggal = tanggal, keterangan = keterangan.trim()))
-    }
-
-    suspend fun hapusLibur(tanggal: String) = db.liburDao().hapus(tanggal)
-
-    suspend fun liburHariIni(tanggal: String = tanggalHariIni()): LiburEntity? =
-        db.liburDao().byTanggal(tanggal)
-
     // ---- Riwayat per karyawan (S6) ----
 
     /** Karyawan + baris harian satu bulan. Null bila karyawan tidak ditemukan. */
@@ -173,15 +159,13 @@ class Repository(private val db: AppDatabase) {
         } else {
             YearMonth.parse(prefix).atEndOfMonth()
         }
-        val libur = db.liburDao().byBulan(prefix).map { it.tanggal }.toSet()
         val baris = barisRiwayat(
             karyawan = karyawan,
             absensi = db.absensiDao().byBulan(prefix).filter { it.karyawanId == karyawanId },
             izin = db.izinDao().byBulan(prefix).filter { it.karyawanId == karyawanId },
             prefix = prefix,
             sampai = sampai,
-            toleransiMenit = toleransiMenit,
-            libur = libur
+            toleransiMenit = toleransiMenit
         )
         return karyawan to baris
     }
@@ -198,8 +182,7 @@ class Repository(private val db: AppDatabase) {
         } else {
             YearMonth.parse(prefix).atEndOfMonth()
         }
-        val libur = db.liburDao().byBulan(prefix).map { it.tanggal }.toSet()
-        val hariKerja = hariKerjaBulan(prefix, sampai, libur).map { it.toString() }.toSet()
+        val hariKerja = hariKerjaBulan(prefix, sampai).map { it.toString() }.toSet()
         return karyawan.map { k ->
             val abs = absensi.filter { it.karyawanId == k.id }
             val izn = izin.filter { it.karyawanId == k.id }

@@ -27,12 +27,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.absensi.app.data.KaryawanAbsenUi
-import id.absensi.app.data.LiburEntity
 import id.absensi.app.data.Repository
 import id.absensi.app.data.StatusHadir
 import id.absensi.app.data.formatTanggalIndonesia
@@ -49,14 +47,12 @@ import kotlinx.coroutines.launch
 @Composable
 fun AbsenScreen(repo: Repository, toleransiMenit: Int, onPesan: (String) -> Unit) {
     var daftar by remember { mutableStateOf<List<KaryawanAbsenUi>>(emptyList()) }
-    var libur by remember { mutableStateOf<LiburEntity?>(null) }
     var jamMenit by remember { mutableStateOf(menitSekarang()) }
     val scope = rememberCoroutineScope()
     val tanggal = tanggalHariIni()
 
     suspend fun muat() {
         daftar = repo.daftarAbsenHariIni(tanggal, toleransiMenit)
-        libur = repo.liburHariIni(tanggal)
     }
 
     LaunchedEffect(Unit) {
@@ -129,20 +125,6 @@ fun AbsenScreen(repo: Repository, toleransiMenit: Int, onPesan: (String) -> Unit
             )
         }
         Spacer(Modifier.height(12.dp))
-        libur?.let {
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = Color(0xFFFFF3E0)
-            ) {
-                Text(
-                    text = "Hari ini libur" + if (it.keterangan.isNotBlank()) ": ${it.keterangan}" else "",
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFFB26A00)
-                )
-            }
-            Spacer(Modifier.height(12.dp))
-        }
         if (daftar.isEmpty()) {
             KacaCard(Modifier.fillMaxWidth()) {
                 Text(

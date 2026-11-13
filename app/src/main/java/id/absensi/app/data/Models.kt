@@ -67,14 +67,14 @@ fun parseJamMenit(teks: String): Int? {
     return jam * 60 + menit
 }
 
-/** Semua hari kerja (Senin-Jumat, bukan hari libur) di bulan `prefix` ("yyyy-MM") sampai tanggal `sampai`. */
-fun hariKerjaBulan(prefix: String, sampai: LocalDate = LocalDate.now(), libur: Set<String> = emptySet()): List<LocalDate> {
+/** Semua hari kerja (Senin-Jumat) di bulan `prefix` ("yyyy-MM") sampai tanggal `sampai`. */
+fun hariKerjaBulan(prefix: String, sampai: LocalDate = LocalDate.now()): List<LocalDate> {
     val ym = YearMonth.parse(prefix)
     val akhir = minOf(ym.atEndOfMonth(), sampai)
     val hasil = mutableListOf<LocalDate>()
     var d = ym.atDay(1)
     while (!d.isAfter(akhir)) {
-        if (d.dayOfWeek != DayOfWeek.SATURDAY && d.dayOfWeek != DayOfWeek.SUNDAY && d.toString() !in libur) hasil.add(d)
+        if (d.dayOfWeek != DayOfWeek.SATURDAY && d.dayOfWeek != DayOfWeek.SUNDAY) hasil.add(d)
         d = d.plusDays(1)
     }
     return hasil
@@ -98,13 +98,12 @@ fun barisRiwayat(
     izin: List<IzinEntity>,
     prefix: String,
     sampai: LocalDate,
-    toleransiMenit: Int,
-    libur: Set<String> = emptySet()
+    toleransiMenit: Int
 ): List<RiwayatHari> {
     val shift = Shift.dariNama(karyawan.shift)
     val absPerTanggal = absensi.associateBy { it.tanggal }
     val izinPerTanggal = izin.associateBy { it.tanggal }
-    return hariKerjaBulan(prefix, sampai, libur).map { d ->
+    return hariKerjaBulan(prefix, sampai).map { d ->
         val tgl = d.toString()
         val iz = izinPerTanggal[tgl]
         if (iz != null) {

@@ -120,6 +120,72 @@ class Repository(private val db: AppDatabase) {
 
     suspend fun hapusIzin(karyawanId: Long, tanggal: String) = db.izinDao().hapus(karyawanId, tanggal)
 
+    // ---- Koreksi manual (S1) ----
+
+    /**
+     * Koreksi jam absen oleh admin. Kedua jam kosong = hapus catatan hari itu.
+     * Pulang sebelum masuk ditolak (kemungkinan salah ketik).
+     */
+    suspend fun koreksiAbsen(karyawanId: Long, tanggal: String, masukMenit: Int?, pulangMenit: Int?) {
+        require(masukMenit == null || masukMenit in 0..1439) { "Jam masuk tidak valid" }
+        require(pulangMenit == null || pulangMenit in 0..1439) { "Jam pulang tidak valid" }
+        require(masukMenit == null || pulangMenit == null || pulangMenit >= masukMenit) {
+            "Jam pulang tidak boleh sebelum jam masuk"
+        }
+        val dao = db.absensiDao()
+        val ada = dao.byKaryawanTanggal(karyawanId, tanggal)
+        if (masukMenit == null && pulangMenit == null) {
+            if (ada != null) dao.hapus(karyawanId, tanggal)
+            return
+        }
+        if (ada == null) {
+            dao.insert(AbsensiEntity(karyawanId = karyawanId, tanggal = tanggal, masukMenit = masukMenit, pulangMenit = pulangMenit))
+        } else {
+            dao.update(ada.copy(masukMenit = masukMenit, pulangMenit = pulangMenit))
+        }
+    }
+
+    // ---- Hari libur (S4) ----
+
+    suspend fun daftarLibur(): List<LiburEntity> = db.liburDao().semua()
+
+    suspend fun tambahLibur(tanggal: String, keterangan: String = "") {
+        require(tanggal.isNotBlank()) { "Tanggal tidak boleh kosong" }
+        db.liburDao().insert(LiburEntity(tanggal = tanggal, keterangan = keterangan.trim()))
+    }
+
+    suspend fun hapusLibur(tanggal: String) = db.liburDao().hapus(tanggal)
+
+    suspend fun liburHariIni(tanggal: String = tanggalHariIni()): LiburEntity? =
+        db.liburDao().byTanggal(tanggal)
+
+    // ---- Riwayat per karyawan (S6) ----
+
+    /** Karyawan + baris harian satu bulan. Null bila karyawan tidak ditemukan. */
+    suspend fun riwayatKaryawan(
+        karyawanId: Long,
+        prefix: String,
+        toleransiMenit: Int
+    ): Pair<KaryawanEntity, List<RiwayatHari>>? {
+        val karyawan = db.karyawanDao().byId(karyawanId) ?: return null
+        val sampai = if (prefix == LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM"))) {
+            LocalDate.now()
+        } else {
+            YearMonth.parse(prefix).atEndOfMonth()
+        }
+        val libur = db.liburDao().byBulan(prefix).map { it.tanggal }.toSet()
+        val baris = barisRiwayat(
+            karyawan = karyawan,
+            absensi = db.absensiDao().byBulan(prefix).filter { it.karyawanId == karyawanId },
+            izin = db.izinDao().byBulan(prefix).filter { it.karyawanId == karyawanId },
+            prefix = prefix,
+            sampai = sampai,
+            toleransiMenit = toleransiMenit,
+            libur = libur
+        )
+        return karyawan to baris
+    }
+
     // ---- Rekap ----
 
     /** Rekap satu bulan ("yyyy-MM"). Alpa = hari kerja tanpa absen dan tanpa izin. */
@@ -132,7 +198,8 @@ class Repository(private val db: AppDatabase) {
         } else {
             YearMonth.parse(prefix).atEndOfMonth()
         }
-        val hariKerja = hariKerjaBulan(prefix, sampai).map { it.toString() }.toSet()
+        val libur = db.liburDao().byBulan(prefix).map { it.tanggal }.toSet()
+        val hariKerja = hariKerjaBulan(prefix, sampai, libur).map { it.toString() }.toSet()
         return karyawan.map { k ->
             val abs = absensi.filter { it.karyawanId == k.id }
             val izn = izin.filter { it.karyawanId == k.id }

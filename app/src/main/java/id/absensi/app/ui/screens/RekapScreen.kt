@@ -1,5 +1,6 @@
 package id.absensi.app.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -38,7 +39,7 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
 @Composable
-fun RekapScreen(repo: Repository, toleransiMenit: Int) {
+fun RekapScreen(repo: Repository, toleransiMenit: Int, onKaryawan: (Long, String) -> Unit) {
     var bulan by remember { mutableStateOf(YearMonth.now()) }
     var rekap by remember { mutableStateOf<List<RekapKaryawan>>(emptyList()) }
     val prefix = bulan.format(DateTimeFormatter.ofPattern("yyyy-MM"))
@@ -105,7 +106,11 @@ fun RekapScreen(repo: Repository, toleransiMenit: Int) {
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(rekap, key = { it.karyawanId }) { r ->
-                    KacaCard(Modifier.fillMaxWidth()) {
+                    KacaCard(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onKaryawan(r.karyawanId, prefix) }
+                    ) {
                         Row(
                             modifier = Modifier.padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically

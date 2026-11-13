@@ -52,7 +52,9 @@ import id.absensi.app.data.versiAplikasi
 import id.absensi.app.ui.screens.AbsenScreen
 import id.absensi.app.ui.screens.KaryawanScreen
 import id.absensi.app.ui.screens.LainnyaScreen
+import id.absensi.app.ui.screens.LiburScreen
 import id.absensi.app.ui.screens.RekapScreen
+import id.absensi.app.ui.screens.RiwayatKaryawanScreen
 import id.absensi.app.ui.theme.AbsensiTheme
 import id.absensi.app.ui.theme.AuroraBackground
 import kotlinx.coroutines.delay
@@ -73,6 +75,8 @@ private fun AbsensiApp(prefs: SharedPreferences) {
     var gelap by remember { mutableStateOf(prefs.getBoolean("gelap", true)) }
     var toleransi by remember { mutableIntStateOf(prefs.getInt("toleransi", 15)) }
     var tab by remember { mutableIntStateOf(0) }
+    var riwayatTarget by remember { mutableStateOf<Pair<Long, String>?>(null) }
+    var tampilLibur by remember { mutableStateOf(false) }
     var repo by remember { mutableStateOf<Repository?>(null) }
     var pembaruanOtomatis by remember { mutableStateOf<InfoPembaruan?>(null) }
     var notifAbsen by remember { mutableStateOf<String?>(null) }
@@ -100,7 +104,9 @@ private fun AbsensiApp(prefs: SharedPreferences) {
         AuroraBackground(isDark = gelap) {
             Scaffold(
                 bottomBar = {
-                    NavigationBar {
+                    // Layar detail (riwayat/libur) menutupi tab — nav bawah disembunyikan.
+                    if (riwayatTarget == null && !tampilLibur) {
+                        NavigationBar {
                         NavigationBarItem(
                             selected = tab == 0,
                             onClick = { tab = 0 },
@@ -125,6 +131,7 @@ private fun AbsensiApp(prefs: SharedPreferences) {
                             icon = { Icon(Icons.Filled.Settings, contentDescription = "Lainnya") },
                             label = { Text("Lainnya") }
                         )
+                        }
                     }
                 }
             ) { padding ->
@@ -142,19 +149,32 @@ private fun AbsensiApp(prefs: SharedPreferences) {
                             CircularProgressIndicator()
                         }
                     } else {
-                        when (tab) {
-                            0 -> AbsenScreen(r, toleransi) { notifAbsen = it }
-                            1 -> RekapScreen(r, toleransi)
-                            2 -> KaryawanScreen(r)
-                            3 -> LainnyaScreen(
+                        val target = riwayatTarget
+                        when {
+                            target != null -> RiwayatKaryawanScreen(
                                 repo = r,
+                                karyawanId = target.first,
+                                prefix = target.second,
                                 toleransiMenit = toleransi,
-                                onToleransiSimpan = {
-                                    toleransi = it
-                                    prefs.edit().putInt("toleransi", it).apply()
-                                },
-                                pembaruanOtomatis = pembaruanOtomatis
+                                onBack = { riwayatTarget = null },
+                                onPesan = { notifAbsen = it }
                             )
+                            tampilLibur -> LiburScreen(repo = r, onBack = { tampilLibur = false })
+                            else -> when (tab) {
+                                0 -> AbsenScreen(r, toleransi) { notifAbsen = it }
+                                1 -> RekapScreen(r, toleransi) { kid, pref -> riwayatTarget = kid to pref }
+                                2 -> KaryawanScreen(r)
+                                3 -> LainnyaScreen(
+                                    repo = r,
+                                    toleransiMenit = toleransi,
+                                    onToleransiSimpan = {
+                                        toleransi = it
+                                        prefs.edit().putInt("toleransi", it).apply()
+                                    },
+                                    pembaruanOtomatis = pembaruanOtomatis,
+                                    onKelolaLibur = { tampilLibur = true }
+                                )
+                            }
                         }
                     }
                     // Pop-up absen: anak langsung Box layar penuh supaya

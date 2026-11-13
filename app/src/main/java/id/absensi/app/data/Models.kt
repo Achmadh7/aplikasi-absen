@@ -55,17 +55,79 @@ fun formatBulanIndonesia(prefix: String): String {
 fun statusMasuk(standarMenit: Int, masukMenit: Int, toleransiMenit: Int): StatusHadir =
     if (masukMenit <= standarMenit + toleransiMenit) StatusHadir.HADIR else StatusHadir.TERLAMBAT
 
-/** Semua hari kerja (Senin-Jumat) di bulan `prefix` ("yyyy-MM") sampai tanggal `sampai`. */
-fun hariKerjaBulan(prefix: String, sampai: LocalDate = LocalDate.now()): List<LocalDate> {
+/** "08.05" atau "08:05" -> 485. Null bila format salah. */
+fun parseJamMenit(teks: String): Int? {
+    val pisah = teks.trim().split(".", ":")
+    if (pisah.size != 2) return null
+    val jam = pisah[0].toIntOrNull() ?: return null
+    val menitTeks = pisah[1]
+    if (menitTeks.length != 2) return null
+    val menit = menitTeks.toIntOrNull() ?: return null
+    if (jam !in 0..23 || menit !in 0..59) return null
+    return jam * 60 + menit
+}
+
+/** Semua hari kerja (Senin-Jumat, bukan hari libur) di bulan `prefix` ("yyyy-MM") sampai tanggal `sampai`. */
+fun hariKerjaBulan(prefix: String, sampai: LocalDate = LocalDate.now(), libur: Set<String> = emptySet()): List<LocalDate> {
     val ym = YearMonth.parse(prefix)
     val akhir = minOf(ym.atEndOfMonth(), sampai)
     val hasil = mutableListOf<LocalDate>()
     var d = ym.atDay(1)
     while (!d.isAfter(akhir)) {
-        if (d.dayOfWeek != DayOfWeek.SATURDAY && d.dayOfWeek != DayOfWeek.SUNDAY) hasil.add(d)
+        if (d.dayOfWeek != DayOfWeek.SATURDAY && d.dayOfWeek != DayOfWeek.SUNDAY && d.toString() !in libur) hasil.add(d)
         d = d.plusDays(1)
     }
     return hasil
+}
+
+/** Satu baris riwayat harian untuk layar detail per karyawan. */
+data class RiwayatHari(
+    val tanggal: String,
+    val status: StatusHadir,
+    val masukMenit: Int?,
+    val pulangMenit: Int?,
+    /** Menit lewat jam masuk shift, hanya bila TERLAMBAT. */
+    val terlambatMenit: Int = 0
+)
+
+/** Baris riwayat satu karyawan selama satu bulan — murni (bisa dites).
+ * Izin didahulukan; tanpa catatan masuk dan tanpa izin = ALPA. */
+fun barisRiwayat(
+    karyawan: KaryawanEntity,
+    absensi: List<AbsensiEntity>,
+    izin: List<IzinEntity>,
+    prefix: String,
+    sampai: LocalDate,
+    toleransiMenit: Int,
+    libur: Set<String> = emptySet()
+): List<RiwayatHari> {
+    val shift = Shift.dariNama(karyawan.shift)
+    val absPerTanggal = absensi.associateBy { it.tanggal }
+    val izinPerTanggal = izin.associateBy { it.tanggal }
+    return hariKerjaBulan(prefix, sampai, libur).map { d ->
+        val tgl = d.toString()
+        val iz = izinPerTanggal[tgl]
+        if (iz != null) {
+            val s = when (iz.jenis) {
+                "SAKIT" -> StatusHadir.SAKIT
+                "CUTI" -> StatusHadir.CUTI
+                else -> StatusHadir.IZIN
+            }
+            RiwayatHari(tgl, s, null, null)
+        } else {
+            val a = absPerTanggal[tgl]
+            val masuk = a?.masukMenit
+            if (masuk == null) {
+                RiwayatHari(tgl, StatusHadir.ALPA, null, a?.pulangMenit)
+            } else {
+                val s = statusMasuk(shift.masukMenit, masuk, toleransiMenit)
+                RiwayatHari(
+                    tgl, s, masuk, a?.pulangMenit,
+                    if (s == StatusHadir.TERLAMBAT) masuk - shift.masukMenit else 0
+                )
+            }
+        }
+    }
 }
 
 /** Baris karyawan di layar Absen. */

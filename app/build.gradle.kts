@@ -17,8 +17,22 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("ci") {
+            storeFile = rootProject.file("absensi.p12")
+            storePassword = "Absensi2026!"
+            keyAlias = "absensi"
+            keyPassword = "Absensi2026!"
+            storeType = "PKCS12"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("ci")
+        }
         release {
+            signingConfig = signingConfigs.getByName("ci")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

@@ -21,5 +21,5 @@ Not yet available: Excel export, cloud backup (Firebase), light/dark mode.
 
 ## Build
 
-- **CI:** Actions → Build Absensi → Run workflow (branch `main`). Artifacts: `Absensi-Debug` and `Absensi-Release-Unsigned` (the release APK is unsigned for now — no keystore yet).
+- **CI:** Actions → Build Absensi → Run workflow (branch `main`). Artifacts: `Absensi-Debug` and `Absensi-Release` (signed with the release keystore; the keystore itself is restored in CI from the `ABSENSI_KEYSTORE_BASE64` secret).
 - **Local:** open the project in Android Studio and press Run. (This repo has no Gradle wrapper yet; local builds go through Android Studio.)

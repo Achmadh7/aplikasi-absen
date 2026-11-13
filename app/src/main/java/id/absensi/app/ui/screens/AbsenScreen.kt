@@ -45,10 +45,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
-fun AbsenScreen(repo: Repository, toleransiMenit: Int) {
+fun AbsenScreen(repo: Repository, toleransiMenit: Int, onPesan: (String) -> Unit) {
     var daftar by remember { mutableStateOf<List<KaryawanAbsenUi>>(emptyList()) }
     var jamMenit by remember { mutableStateOf(menitSekarang()) }
-    var pesan by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val tanggal = tanggalHariIni()
 
@@ -69,19 +68,19 @@ fun AbsenScreen(repo: Repository, toleransiMenit: Int) {
         scope.launch {
             when {
                 k.status == StatusHadir.IZIN || k.status == StatusHadir.SAKIT || k.status == StatusHadir.CUTI -> {
-                    pesan = "${k.nama} hari ini ${labelStatus(k.status).lowercase()}."
+                    onPesan("${k.nama} hari ini ${labelStatus(k.status).lowercase()}.")
                 }
                 k.pulangMenit != null -> {
-                    pesan = "${k.nama} sudah pulang ${menitKeJam(k.pulangMenit)}."
+                    onPesan("${k.nama} sudah pulang ${menitKeJam(k.pulangMenit)}.")
                 }
                 else -> {
                     val hasil = repo.tapAbsenById(k.id, menitSekarang(), tanggal)
                     if (hasil != null) {
-                        pesan = if (hasil.pulangMenit != null) {
+                        onPesan(if (hasil.pulangMenit != null) {
                             "${k.nama} • Pulang ${menitKeJam(hasil.pulangMenit)}"
                         } else {
                             "${k.nama} • Masuk ${menitKeJam(hasil.masukMenit ?: menitSekarang())}"
-                        }
+                        })
                     }
                     muat()
                 }
@@ -124,21 +123,6 @@ fun AbsenScreen(repo: Repository, toleransiMenit: Int) {
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                 fontWeight = FontWeight.Bold
             )
-        }
-        pesan?.let {
-            Spacer(Modifier.height(8.dp))
-            KacaCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { pesan = null }
-            ) {
-                Text(
-                    text = it,
-                    modifier = Modifier.padding(12.dp),
-                    fontWeight = FontWeight.Bold,
-                    color = AuroraCyan
-                )
-            }
         }
         Spacer(Modifier.height(12.dp))
         if (daftar.isEmpty()) {

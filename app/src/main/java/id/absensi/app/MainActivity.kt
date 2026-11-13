@@ -5,9 +5,20 @@ import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CheckCircle
@@ -18,6 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -28,7 +40,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import id.absensi.app.data.DatabaseProvider
 import id.absensi.app.data.InfoPembaruan
 import id.absensi.app.data.Repository
@@ -40,6 +55,7 @@ import id.absensi.app.ui.screens.LainnyaScreen
 import id.absensi.app.ui.screens.RekapScreen
 import id.absensi.app.ui.theme.AbsensiTheme
 import id.absensi.app.ui.theme.AuroraBackground
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -59,10 +75,19 @@ private fun AbsensiApp(prefs: SharedPreferences) {
     var tab by remember { mutableIntStateOf(0) }
     var repo by remember { mutableStateOf<Repository?>(null) }
     var pembaruanOtomatis by remember { mutableStateOf<InfoPembaruan?>(null) }
+    var notifAbsen by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         val db = DatabaseProvider.init(context)
         repo = Repository(db)
+    }
+
+    // Pop-up absen hilang sendiri setelah 2,6 detik (gaya badge "Tersinkron" Kasir).
+    LaunchedEffect(notifAbsen) {
+        if (notifAbsen != null) {
+            delay(2600)
+            notifAbsen = null
+        }
     }
 
     // Cek pembaruan diam-diam saat aplikasi dibuka; hasilnya hanya tampil
@@ -118,7 +143,7 @@ private fun AbsensiApp(prefs: SharedPreferences) {
                         }
                     } else {
                         when (tab) {
-                            0 -> AbsenScreen(r, toleransi)
+                            0 -> AbsenScreen(r, toleransi) { notifAbsen = it }
                             1 -> RekapScreen(r, toleransi)
                             2 -> KaryawanScreen(r)
                             3 -> LainnyaScreen(
@@ -132,7 +157,58 @@ private fun AbsensiApp(prefs: SharedPreferences) {
                             )
                         }
                     }
+                    // Pop-up absen: anak langsung Box layar penuh supaya
+                    // benar-benar di tengah atas (align di dalam Scaffold
+                    // tidak berpengaruh — pelajaran dari badge Apotek).
+                    NotifAbsenPopUp(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .statusBarsPadding()
+                            .padding(top = 12.dp),
+                        pesan = notifAbsen,
+                        onTutup = { notifAbsen = null }
+                    )
                 }
+            }
+        }
+    }
+}
+
+/** Pil mengambang gaya badge "Tersinkron" Kasir: navy + ikon centang cyan. */
+@Composable
+private fun NotifAbsenPopUp(
+    modifier: Modifier = Modifier,
+    pesan: String?,
+    onTutup: () -> Unit
+) {
+    AnimatedVisibility(
+        visible = pesan != null,
+        enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+        exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+        modifier = modifier
+    ) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = Color(0xFF1B3A5C),
+            shadowElevation = 8.dp,
+            modifier = Modifier.clickable { onTutup() }
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    Icons.Filled.CheckCircle,
+                    contentDescription = null,
+                    tint = Color(0xFF40C4FF),
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = pesan ?: "",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }

@@ -34,7 +34,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import id.absensi.app.data.InfoPembaruan
@@ -50,15 +49,12 @@ import kotlinx.coroutines.launch
 fun LainnyaScreen(
     repo: Repository,
     toleransiMenit: Int,
-    pinSaatIni: String,
     onToleransiSimpan: (Int) -> Unit,
-    onPinSimpan: (String) -> Unit,
     pembaruanOtomatis: InfoPembaruan? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var toleransiTeks by remember(toleransiMenit) { mutableStateOf(toleransiMenit.toString()) }
-    var dialogPin by remember { mutableStateOf(false) }
     var jumlahKaryawan by remember { mutableStateOf(0) }
 
     // Pembaruan aplikasi (GitHub Releases).
@@ -131,13 +127,6 @@ fun LainnyaScreen(
         }
         KacaCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(text = "Keamanan", fontWeight = FontWeight.Bold)
-                Text(text = "Menu Rekap, Karyawan, dan Lainnya dikunci PIN admin.")
-                Button(onClick = { dialogPin = true }) { Text("Ubah PIN Admin") }
-            }
-        }
-        KacaCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(text = "Pembaruan Aplikasi", fontWeight = FontWeight.Bold)
                 Text(text = "Versi terpasang: $versiSaatIni")
                 if (infoPembaruan != null) {
@@ -174,67 +163,6 @@ fun LainnyaScreen(
             }
         }
         Spacer(Modifier.height(8.dp))
-    }
-
-    if (dialogPin) {
-        var lama by remember { mutableStateOf("") }
-        var baru by remember { mutableStateOf("") }
-        var konfirmasi by remember { mutableStateOf("") }
-        var salah by remember { mutableStateOf<String?>(null) }
-        AlertDialog(
-            onDismissRequest = { dialogPin = false },
-            title = { Text("Ubah PIN Admin") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = lama,
-                        onValueChange = { if (it.length <= 4 && it.all { c -> c.isDigit() }) lama = it },
-                        label = { Text("PIN lama") },
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = baru,
-                        onValueChange = { if (it.length <= 4 && it.all { c -> c.isDigit() }) baru = it },
-                        label = { Text("PIN baru (4 digit)") },
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = konfirmasi,
-                        onValueChange = { if (it.length <= 4 && it.all { c -> c.isDigit() }) konfirmasi = it },
-                        label = { Text("Ulangi PIN baru") },
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    salah?.let {
-                        Text(text = it, color = MaterialTheme.colorScheme.error)
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    when {
-                        lama != pinSaatIni -> salah = "PIN lama salah."
-                        baru.length != 4 -> salah = "PIN baru harus 4 digit."
-                        baru != konfirmasi -> salah = "PIN baru tidak sama dengan konfirmasi."
-                        else -> {
-                            onPinSimpan(baru)
-                            dialogPin = false
-                        }
-                    }
-                }) { Text("Simpan") }
-            },
-            dismissButton = {
-                TextButton(onClick = { dialogPin = false }) { Text("Batal") }
-            }
-        )
     }
 
     if (dialogPembaruan && infoPembaruan != null) {

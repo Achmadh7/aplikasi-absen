@@ -6,7 +6,6 @@ Employee attendance app for a company. **One shared phone at the office** — em
 - Shift 1 08:00–15:00, shift 2 16:00–22:00 (15-minute late tolerance)
 - Leave / sick / day off (recorded by the admin)
 - Monthly recap per employee + attendance percentage
-- Rekap, Karyawan, and Lainnya menus are locked behind an admin PIN (4 digits)
 - Design: R1 Kaca Aurora (dark + aurora + glass)
 
 ## Tech stack
@@ -16,7 +15,7 @@ R8 is enabled in release builds (minify + shrinkResources). Weekly Dependabot up
 
 ## Status
 
-v1.0.0 — initial scaffold: Absen, Karyawan, Rekap, and Lainnya screens + admin PIN.
+v1.0.0 — initial scaffold: Absen, Karyawan, Rekap, and Lainnya screens (all menus open, no PIN gate).
 Not yet available: Excel export, cloud backup (Firebase), light/dark mode.
 
 ## In-app updates

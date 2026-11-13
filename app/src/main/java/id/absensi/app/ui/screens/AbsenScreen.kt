@@ -144,7 +144,7 @@ fun AbsenScreen(repo: Repository, toleransiMenit: Int) {
         if (daftar.isEmpty()) {
             KacaCard(Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Belum ada karyawan. Tambah dulu di menu Karyawan (PIN admin).",
+                    text = "Belum ada karyawan. Tambah dulu di menu Karyawan.",
                     modifier = Modifier.padding(16.dp)
                 )
             }

@@ -41,7 +41,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import id.absensi.app.data.DatabaseProvider
+import id.absensi.app.data.InfoPembaruan
 import id.absensi.app.data.Repository
+import id.absensi.app.data.cekPembaruan
+import id.absensi.app.data.versiAplikasi
 import id.absensi.app.ui.screens.AbsenScreen
 import id.absensi.app.ui.screens.KaryawanScreen
 import id.absensi.app.ui.screens.LainnyaScreen
@@ -70,10 +73,17 @@ private fun AbsensiApp(prefs: SharedPreferences) {
     var tabTunggu by remember { mutableIntStateOf(-1) }
     var modePin by remember { mutableStateOf<String?>(null) }
     var repo by remember { mutableStateOf<Repository?>(null) }
+    var pembaruanOtomatis by remember { mutableStateOf<InfoPembaruan?>(null) }
 
     LaunchedEffect(Unit) {
         val db = DatabaseProvider.init(context)
         repo = Repository(db)
+    }
+
+    // Cek pembaruan diam-diam saat aplikasi dibuka; hasilnya hanya tampil
+    // di kartu Pembaruan pada tab Lainnya (layar Absen tidak terganggu).
+    LaunchedEffect(Unit) {
+        pembaruanOtomatis = cekPembaruan(versiAplikasi(context))
     }
 
     fun mintaAdmin(keTab: Int) {
@@ -146,7 +156,8 @@ private fun AbsensiApp(prefs: SharedPreferences) {
                                 onPinSimpan = {
                                     pin = it
                                     prefs.edit().putString("pin_admin", it).apply()
-                                }
+                                },
+                                pembaruanOtomatis = pembaruanOtomatis
                             )
                         }
                     }

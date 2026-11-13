@@ -19,6 +19,12 @@ R8 is enabled in release builds (minify + shrinkResources). Weekly Dependabot up
 v1.0.0 — initial scaffold: Absen, Karyawan, Rekap, and Lainnya screens + admin PIN.
 Not yet available: Excel export, cloud backup (Firebase), light/dark mode.
 
+## In-app updates
+
+The app checks the latest GitHub Release when it opens (silently — the Absen screen is never interrupted). If a newer version exists, the **Pembaruan Aplikasi** card in Lainnya shows it; **Periksa Pembaruan** checks manually. **Unduh & Pasang** downloads the APK and opens the installer automatically when the download finishes. The first time, Android asks you to allow "Install unknown apps" for Absensi — allow it once.
+
+To publish an update: bump `versionName`/`versionCode` in `app/build.gradle.kts`, build the signed release APK (CI artifact `Absensi-Release`), then create a GitHub Release tagged `vX.Y.Z` (matching the new version) and attach the APK file to it. The app only sees releases that carry an `.apk` asset. No release exists yet, so the check finds nothing until the first one is published.
+
 ## Build
 
 - **CI:** Actions → Build Absensi → Run workflow (branch `main`). Artifacts: `Absensi-Debug` and `Absensi-Release` (signed with the release keystore; the keystore itself is restored in CI from the `ABSENSI_KEYSTORE_BASE64` secret).

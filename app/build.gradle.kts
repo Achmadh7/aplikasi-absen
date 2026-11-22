@@ -33,8 +33,9 @@ android {
         }
         release {
             signingConfig = signingConfigs.getByName("ci")
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // R8 bikin crash saat start (NPE di composition). Matikan dulu; debug & release jadi sama.
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

@@ -26,7 +26,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Group
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -50,12 +49,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import id.absensi.app.data.DatabaseProvider
-import id.absensi.app.data.InfoPembaruan
 import id.absensi.app.data.Repository
-import id.absensi.app.data.cekPembaruan
-import id.absensi.app.data.versiAplikasi
 import id.absensi.app.ui.screens.AbsenScreen
-import id.absensi.app.ui.screens.LainnyaScreen
 import id.absensi.app.ui.screens.RekapScreen
 import id.absensi.app.ui.screens.RiwayatSiswaScreen
 import id.absensi.app.ui.screens.SiswaScreen
@@ -80,11 +75,10 @@ class MainActivity : ComponentActivity() {
 private fun AbsensiApp(prefs: SharedPreferences) {
     val context = LocalContext.current
     val gelap = false
-    var toleransi by remember { mutableIntStateOf(prefs.getInt("toleransi", 15)) }
+    val toleransi = remember { prefs.getInt("toleransi", 15) }
     var tab by remember { mutableIntStateOf(0) }
     var riwayatTarget by remember { mutableStateOf<Pair<Long, String>?>(null) }
     var repo by remember { mutableStateOf<Repository?>(null) }
-    var pembaruanOtomatis by remember { mutableStateOf<InfoPembaruan?>(null) }
     var notifAbsen by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
@@ -97,10 +91,6 @@ private fun AbsensiApp(prefs: SharedPreferences) {
             delay(2600)
             notifAbsen = null
         }
-    }
-
-    LaunchedEffect(Unit) {
-        pembaruanOtomatis = cekPembaruan(versiAplikasi(context))
     }
 
     AbsensiTheme(darkTheme = gelap) {
@@ -153,13 +143,6 @@ private fun AbsensiApp(prefs: SharedPreferences) {
                                         icon = { Icon(Icons.Filled.Group, contentDescription = "Siswa") },
                                         label = { Text("Siswa") }
                                     )
-                                    NavigationBarItem(
-                                        selected = tab == 3,
-                                        onClick = { tab = 3 },
-                                        colors = itemColors,
-                                        icon = { Icon(Icons.Filled.Settings, contentDescription = "Lainnya") },
-                                        label = { Text("Lainnya") }
-                                    )
                                 }
                             }
                         }
@@ -193,16 +176,7 @@ private fun AbsensiApp(prefs: SharedPreferences) {
                             else -> when (tab) {
                                 0 -> AbsenScreen(r, toleransi) { notifAbsen = it }
                                 1 -> RekapScreen(r, toleransi) { sid, pref -> riwayatTarget = sid to pref }
-                                2 -> SiswaScreen(r)
-                                3 -> LainnyaScreen(
-                                    repo = r,
-                                    toleransiMenit = toleransi,
-                                    onToleransiSimpan = {
-                                        toleransi = it
-                                        prefs.edit().putInt("toleransi", it).apply()
-                                    },
-                                    pembaruanOtomatis = pembaruanOtomatis
-                                )
+                                else -> SiswaScreen(r)
                             }
                         }
                     }

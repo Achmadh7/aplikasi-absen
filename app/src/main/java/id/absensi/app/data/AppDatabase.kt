@@ -15,32 +15,38 @@ import androidx.room.RoomDatabase
 import androidx.room.Update
 import kotlin.jvm.Volatile
 
-@Entity(tableName = "karyawan")
-data class KaryawanEntity(
+// shortcut: NIS dipakai langsung sebagai kode barcode; tambah kolom kodeBarcode terpisah jika kartu cetak memakai ID berbeda.
+@Entity(
+    tableName = "siswa",
+    indices = [Index(value = ["nis"], unique = true)]
+)
+data class SiswaEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val nama: String,
-    val jabatan: String,
-    /** Shift.name */
-    val shift: String,
+    val nis: String,
+    val kelas: String,
+    val noWaOrtu: String,
+    /** JamSekolah.name */
+    val sesi: String,
     val aktif: Boolean = true,
     val dibuat: Long = System.currentTimeMillis()
 )
 
 @Entity(
     tableName = "absensi",
-    indices = [Index(value = ["karyawanId", "tanggal"], unique = true)],
+    indices = [Index(value = ["siswaId", "tanggal"], unique = true)],
     foreignKeys = [
         ForeignKey(
-            entity = KaryawanEntity::class,
+            entity = SiswaEntity::class,
             parentColumns = ["id"],
-            childColumns = ["karyawanId"],
+            childColumns = ["siswaId"],
             onDelete = ForeignKey.CASCADE
         )
     ]
 )
 data class AbsensiEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val karyawanId: Long,
+    val siswaId: Long,
     /** yyyy-MM-dd */
     val tanggal: String,
     val masukMenit: Int? = null,
@@ -50,51 +56,54 @@ data class AbsensiEntity(
 
 @Entity(
     tableName = "izin",
-    indices = [Index(value = ["karyawanId", "tanggal"], unique = true)],
+    indices = [Index(value = ["siswaId", "tanggal"], unique = true)],
     foreignKeys = [
         ForeignKey(
-            entity = KaryawanEntity::class,
+            entity = SiswaEntity::class,
             parentColumns = ["id"],
-            childColumns = ["karyawanId"],
+            childColumns = ["siswaId"],
             onDelete = ForeignKey.CASCADE
         )
     ]
 )
 data class IzinEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val karyawanId: Long,
+    val siswaId: Long,
     /** yyyy-MM-dd */
     val tanggal: String,
-    /** IZIN, SAKIT, atau CUTI */
+    /** IZIN atau SAKIT */
     val jenis: String,
     val keterangan: String = "",
     val dibuat: Long = System.currentTimeMillis()
 )
 
 @Dao
-interface KaryawanDao {
-    @Query("SELECT * FROM karyawan WHERE aktif = 1 ORDER BY nama ASC")
-    suspend fun aktif(): List<KaryawanEntity>
+interface SiswaDao {
+    @Query("SELECT * FROM siswa WHERE aktif = 1 ORDER BY kelas ASC, nama ASC")
+    suspend fun aktif(): List<SiswaEntity>
 
-    @Query("SELECT * FROM karyawan ORDER BY aktif DESC, nama ASC")
-    suspend fun semua(): List<KaryawanEntity>
+    @Query("SELECT * FROM siswa ORDER BY aktif DESC, kelas ASC, nama ASC")
+    suspend fun semua(): List<SiswaEntity>
 
-    @Query("SELECT * FROM karyawan WHERE id = :id")
-    suspend fun byId(id: Long): KaryawanEntity?
+    @Query("SELECT * FROM siswa WHERE id = :id")
+    suspend fun byId(id: Long): SiswaEntity?
+
+    @Query("SELECT * FROM siswa WHERE nis = :nis AND aktif = 1 LIMIT 1")
+    suspend fun byNisAktif(nis: String): SiswaEntity?
 
     @Insert
-    suspend fun insert(e: KaryawanEntity): Long
+    suspend fun insert(e: SiswaEntity): Long
 
     @Update
-    suspend fun update(e: KaryawanEntity)
+    suspend fun update(e: SiswaEntity)
 
-    @Query("UPDATE karyawan SET aktif = 0 WHERE id = :id")
+    @Query("UPDATE siswa SET aktif = 0 WHERE id = :id")
     suspend fun nonaktifkan(id: Long)
 
-    @Query("UPDATE karyawan SET aktif = 1 WHERE id = :id")
+    @Query("UPDATE siswa SET aktif = 1 WHERE id = :id")
     suspend fun aktifkan(id: Long)
 
-    @Query("SELECT COUNT(*) FROM karyawan WHERE aktif = 1")
+    @Query("SELECT COUNT(*) FROM siswa WHERE aktif = 1")
     suspend fun jumlahAktif(): Int
 }
 
@@ -103,8 +112,8 @@ interface AbsensiDao {
     @Query("SELECT * FROM absensi WHERE tanggal = :tanggal")
     suspend fun byTanggal(tanggal: String): List<AbsensiEntity>
 
-    @Query("SELECT * FROM absensi WHERE karyawanId = :kid AND tanggal = :tanggal")
-    suspend fun byKaryawanTanggal(kid: Long, tanggal: String): AbsensiEntity?
+    @Query("SELECT * FROM absensi WHERE siswaId = :sid AND tanggal = :tanggal")
+    suspend fun bySiswaTanggal(sid: Long, tanggal: String): AbsensiEntity?
 
     @Query("SELECT * FROM absensi WHERE tanggal LIKE :prefix || '%'")
     suspend fun byBulan(prefix: String): List<AbsensiEntity>
@@ -115,8 +124,8 @@ interface AbsensiDao {
     @Update
     suspend fun update(e: AbsensiEntity)
 
-    @Query("DELETE FROM absensi WHERE karyawanId = :kid AND tanggal = :tanggal")
-    suspend fun hapus(kid: Long, tanggal: String)
+    @Query("DELETE FROM absensi WHERE siswaId = :sid AND tanggal = :tanggal")
+    suspend fun hapus(sid: Long, tanggal: String)
 }
 
 @Dao
@@ -130,17 +139,17 @@ interface IzinDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(e: IzinEntity): Long
 
-    @Query("DELETE FROM izin WHERE karyawanId = :kid AND tanggal = :tanggal")
-    suspend fun hapus(kid: Long, tanggal: String)
+    @Query("DELETE FROM izin WHERE siswaId = :sid AND tanggal = :tanggal")
+    suspend fun hapus(sid: Long, tanggal: String)
 }
 
 @Database(
-    entities = [KaryawanEntity::class, AbsensiEntity::class, IzinEntity::class],
-    version = 1,
+    entities = [SiswaEntity::class, AbsensiEntity::class, IzinEntity::class],
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
-    abstract fun karyawanDao(): KaryawanDao
+    abstract fun siswaDao(): SiswaDao
     abstract fun absensiDao(): AbsensiDao
     abstract fun izinDao(): IzinDao
 }

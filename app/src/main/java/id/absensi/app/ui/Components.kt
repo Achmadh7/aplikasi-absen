@@ -37,7 +37,6 @@ private val chipWarna = mapOf(
     StatusHadir.BELUM to (Color(0xFF5A6878) to Color(0xFFE8ECF1)),
     StatusHadir.IZIN to (Color(0xFF2E5A88) to Color(0xFFD3E3F3)),
     StatusHadir.SAKIT to (Color(0xFF2E5A88) to Color(0xFFD3E3F3)),
-    StatusHadir.CUTI to (Color(0xFF2E5A88) to Color(0xFFD3E3F3)),
     StatusHadir.ALPA to (Color(0xFFB3261E) to Color(0xFFFDECEA))
 )
 

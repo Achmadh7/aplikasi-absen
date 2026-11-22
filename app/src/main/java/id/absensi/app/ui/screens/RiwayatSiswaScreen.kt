@@ -34,9 +34,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import id.absensi.app.data.KaryawanEntity
 import id.absensi.app.data.Repository
 import id.absensi.app.data.RiwayatHari
+import id.absensi.app.data.SiswaEntity
 import id.absensi.app.data.StatusHadir
 import id.absensi.app.data.formatBulanIndonesia
 import id.absensi.app.data.formatTanggalIndonesia
@@ -45,36 +45,36 @@ import id.absensi.app.data.menitKeJam
 import id.absensi.app.data.parseJamMenit
 import id.absensi.app.ui.KacaCard
 import id.absensi.app.ui.StatusChip
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlinx.coroutines.launch
 
-/** S6 — riwayat satu karyawan selama satu bulan. Ketuk baris harian untuk koreksi (S1). */
+/** Riwayat satu siswa selama satu bulan. Ketuk baris harian untuk koreksi jam absen. */
 @Composable
-fun RiwayatKaryawanScreen(
+fun RiwayatSiswaScreen(
     repo: Repository,
-    karyawanId: Long,
+    siswaId: Long,
     prefix: String,
     toleransiMenit: Int,
     onBack: () -> Unit,
     onPesan: (String) -> Unit
 ) {
-    var karyawan by remember { mutableStateOf<KaryawanEntity?>(null) }
+    var siswa by remember { mutableStateOf<SiswaEntity?>(null) }
     var baris by remember { mutableStateOf<List<RiwayatHari>>(emptyList()) }
     var koreksiHari by remember { mutableStateOf<RiwayatHari?>(null) }
     val scope = rememberCoroutineScope()
 
     suspend fun muat() {
-        val hasil = repo.riwayatKaryawan(karyawanId, prefix, toleransiMenit)
-        karyawan = hasil?.first
+        val hasil = repo.riwayatSiswa(siswaId, prefix, toleransiMenit)
+        siswa = hasil?.first
         baris = hasil?.second ?: emptyList()
     }
 
-    LaunchedEffect(karyawanId, prefix) { muat() }
+    LaunchedEffect(siswaId, prefix) { muat() }
     BackHandler(onBack = onBack)
 
-    val k = karyawan
+    val s = siswa
     val hadir = baris.count { it.status == StatusHadir.HADIR }
     val telat = baris.count { it.status == StatusHadir.TERLAMBAT }
     val alpa = baris.count { it.status == StatusHadir.ALPA }
@@ -90,12 +90,16 @@ fun RiwayatKaryawanScreen(
             }
             Column {
                 Text(
-                    text = k?.nama ?: "Riwayat",
+                    text = s?.nama ?: "Riwayat",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = if (k != null) "${k.jabatan} • ${formatBulanIndonesia(prefix)}" else formatBulanIndonesia(prefix),
+                    text = if (s != null) {
+                        "${s.kelas.ifBlank { "-" }} • ${formatBulanIndonesia(prefix)}"
+                    } else {
+                        formatBulanIndonesia(prefix)
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -116,15 +120,14 @@ fun RiwayatKaryawanScreen(
         if (baris.isEmpty()) {
             KacaCard(Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Belum ada hari kerja pada bulan ini.",
+                    text = "Belum ada hari sekolah pada bulan ini.",
                     modifier = Modifier.padding(16.dp)
                 )
             }
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(baris, key = { it.tanggal }) { r ->
-                    val bisaKoreksi = r.status != StatusHadir.IZIN &&
-                        r.status != StatusHadir.SAKIT && r.status != StatusHadir.CUTI
+                    val bisaKoreksi = r.status != StatusHadir.IZIN && r.status != StatusHadir.SAKIT
                     KacaCard(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -169,17 +172,17 @@ fun RiwayatKaryawanScreen(
     }
 
     val hari = koreksiHari
-    if (hari != null && k != null) {
-        DialogKoreksi(
+    if (hari != null && s != null) {
+        DialogKoreksiSiswa(
             hari = hari,
             onTutup = { koreksiHari = null },
             onSimpan = { masuk, pulang ->
                 scope.launch {
-                    runCatching { repo.koreksiAbsen(karyawanId, hari.tanggal, masuk, pulang) }
+                    runCatching { repo.koreksiAbsen(siswaId, hari.tanggal, masuk, pulang) }
                         .onSuccess {
                             koreksiHari = null
                             muat()
-                            onPesan("Koreksi ${k.nama} ${formatTanggalIndonesia(hari.tanggal)} disimpan.")
+                            onPesan("Koreksi ${s.nama} ${formatTanggalIndonesia(hari.tanggal)} disimpan.")
                         }
                 }
             }
@@ -187,9 +190,8 @@ fun RiwayatKaryawanScreen(
     }
 }
 
-/** S1 — dialog koreksi jam masuk/pulang. Kedua jam kosong = hapus catatan hari itu. */
 @Composable
-private fun DialogKoreksi(
+private fun DialogKoreksiSiswa(
     hari: RiwayatHari,
     onTutup: () -> Unit,
     onSimpan: (Int?, Int?) -> Unit
@@ -209,14 +211,14 @@ private fun DialogKoreksi(
                 OutlinedTextField(
                     value = masukTeks,
                     onValueChange = { masukTeks = it },
-                    label = { Text("Jam masuk (cth: 08.05)") },
+                    label = { Text("Jam masuk (cth: 07.05)") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = pulangTeks,
                     onValueChange = { pulangTeks = it },
-                    label = { Text("Jam pulang (cth: 15.00)") },
+                    label = { Text("Jam pulang (cth: 13.00)") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -230,11 +232,11 @@ private fun DialogKoreksi(
                 val masuk = if (masukTeks.isBlank()) null else parseJamMenit(masukTeks)
                 val pulang = if (pulangTeks.isBlank()) null else parseJamMenit(pulangTeks)
                 if (masukTeks.isNotBlank() && masuk == null) {
-                    galat = "Jam masuk tidak valid — pakai format JJ.MM, cth: 08.05"
+                    galat = "Jam masuk tidak valid — pakai format JJ.MM, cth: 07.05"
                     return@TextButton
                 }
                 if (pulangTeks.isNotBlank() && pulang == null) {
-                    galat = "Jam pulang tidak valid — pakai format JJ.MM, cth: 15.00"
+                    galat = "Jam pulang tidak valid — pakai format JJ.MM, cth: 13.00"
                     return@TextButton
                 }
                 if (masuk != null && pulang != null && pulang < masuk) {

@@ -1,5 +1,6 @@
 package id.absensi.app.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +21,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PersonOff
+import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -43,15 +45,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import id.absensi.app.data.KaryawanEntity
+import id.absensi.app.data.JamSekolah
 import id.absensi.app.data.Repository
-import id.absensi.app.data.Shift
+import id.absensi.app.data.SiswaEntity
 import id.absensi.app.data.formatTanggalIndonesia
 import id.absensi.app.data.tanggalHariIni
 import id.absensi.app.ui.KacaCard
+import id.absensi.app.ui.buatQrBitmap
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -59,15 +63,17 @@ import java.time.ZoneId
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun KaryawanScreen(repo: Repository) {
-    var daftar by remember { mutableStateOf<List<KaryawanEntity>>(emptyList()) }
+fun SiswaScreen(repo: Repository) {
+    var daftar by remember { mutableStateOf<List<SiswaEntity>>(emptyList()) }
     var dialogTambah by remember { mutableStateOf(false) }
-    var editTarget by remember { mutableStateOf<KaryawanEntity?>(null) }
-    var izinTarget by remember { mutableStateOf<KaryawanEntity?>(null) }
+    var editTarget by remember { mutableStateOf<SiswaEntity?>(null) }
+    var izinTarget by remember { mutableStateOf<SiswaEntity?>(null) }
+    var qrTarget by remember { mutableStateOf<SiswaEntity?>(null) }
+    var pesanError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     suspend fun muat() {
-        daftar = repo.semuaKaryawan()
+        daftar = repo.semuaSiswa()
     }
 
     LaunchedEffect(Unit) { muat() }
@@ -79,7 +85,7 @@ fun KaryawanScreen(repo: Repository) {
                 .padding(16.dp)
         ) {
             Text(
-                text = "Karyawan",
+                text = "Siswa",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.ExtraBold
             )
@@ -92,13 +98,13 @@ fun KaryawanScreen(repo: Repository) {
             if (daftar.isEmpty()) {
                 KacaCard(Modifier.fillMaxWidth()) {
                     Text(
-                        text = "Belum ada karyawan. Ketuk tombol + untuk menambah.",
+                        text = "Belum ada siswa. Ketuk tombol + untuk menambah.",
                         modifier = Modifier.padding(16.dp)
                     )
                 }
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    items(daftar, key = { it.id }) { k ->
+                    items(daftar, key = { it.id }) { s ->
                         KacaCard(Modifier.fillMaxWidth()) {
                             Row(
                                 modifier = Modifier.padding(12.dp),
@@ -111,7 +117,9 @@ fun KaryawanScreen(repo: Repository) {
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
                                         Text(
-                                            text = k.nama.split(" ").take(2)
+                                            text = s.nama.split(" ")
+                                                .filter { it.isNotBlank() }
+                                                .take(2)
                                                 .joinToString("") { it.first().toString() },
                                             color = MaterialTheme.colorScheme.onPrimary,
                                             fontWeight = FontWeight.Bold
@@ -124,31 +132,41 @@ fun KaryawanScreen(repo: Repository) {
                                         .padding(start = 12.dp)
                                 ) {
                                     Text(
-                                        text = k.nama + if (k.aktif) "" else " (nonaktif)",
+                                        text = s.nama + if (s.aktif) "" else " (nonaktif)",
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
-                                        text = "${k.jabatan} • ${Shift.dariNama(k.shift).label}",
+                                        text = "${s.kelas.ifBlank { "-" }} • NIS ${s.nis} • ${JamSekolah.dariNama(s.sesi).label}",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
+                                    if (s.noWaOrtu.isNotBlank()) {
+                                        Text(
+                                            text = "WA Ortu: ${s.noWaOrtu}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
-                                IconButton(onClick = { izinTarget = k }) {
+                                IconButton(onClick = { qrTarget = s }) {
+                                    Icon(Icons.Filled.QrCode2, contentDescription = "QR Siswa")
+                                }
+                                IconButton(onClick = { izinTarget = s }) {
                                     Icon(Icons.Filled.Event, contentDescription = "Izin")
                                 }
-                                IconButton(onClick = { editTarget = k }) {
+                                IconButton(onClick = { editTarget = s }) {
                                     Icon(Icons.Filled.Edit, contentDescription = "Ubah")
                                 }
                                 IconButton(onClick = {
                                     scope.launch {
-                                        if (k.aktif) repo.nonaktifkanKaryawan(k.id)
-                                        else repo.aktifkanKaryawan(k.id)
+                                        if (s.aktif) repo.nonaktifkanSiswa(s.id)
+                                        else repo.aktifkanSiswa(s.id)
                                         muat()
                                     }
                                 }) {
                                     Icon(
-                                        if (k.aktif) Icons.Filled.PersonOff else Icons.Filled.PersonAdd,
-                                        contentDescription = if (k.aktif) "Nonaktifkan" else "Aktifkan"
+                                        if (s.aktif) Icons.Filled.PersonOff else Icons.Filled.PersonAdd,
+                                        contentDescription = if (s.aktif) "Nonaktifkan" else "Aktifkan"
                                     )
                                 }
                             }
@@ -163,36 +181,80 @@ fun KaryawanScreen(repo: Repository) {
                 .align(Alignment.BottomEnd)
                 .padding(16.dp)
         ) {
-            Icon(Icons.Filled.Add, contentDescription = "Tambah karyawan")
+            Icon(Icons.Filled.Add, contentDescription = "Tambah siswa")
         }
     }
 
     if (dialogTambah || editTarget != null) {
-        DialogKaryawan(
+        DialogSiswa(
             awal = editTarget,
-            onBatal = { dialogTambah = false; editTarget = null },
-            onSimpan = { nama, jabatan, shift ->
+            error = pesanError,
+            onBatal = { dialogTambah = false; editTarget = null; pesanError = null },
+            onSimpan = { nama, nis, kelas, noWa, sesi ->
                 scope.launch {
-                    if (editTarget != null) {
-                        repo.ubahKaryawan(editTarget!!.copy(nama = nama, jabatan = jabatan, shift = shift.name))
-                    } else {
-                        repo.tambahKaryawan(nama, jabatan, shift)
+                    val res = runCatching {
+                        if (editTarget != null) {
+                            repo.ubahSiswa(
+                                editTarget!!.copy(
+                                    nama = nama,
+                                    nis = nis,
+                                    kelas = kelas,
+                                    noWaOrtu = noWa,
+                                    sesi = sesi.name
+                                )
+                            )
+                        } else {
+                            repo.tambahSiswa(nama, nis, kelas, noWa, sesi)
+                        }
                     }
-                    dialogTambah = false
-                    editTarget = null
-                    muat()
+                    if (res.isFailure) {
+                        pesanError = "NIS / kode barcode sudah dipakai siswa lain."
+                    } else {
+                        dialogTambah = false
+                        editTarget = null
+                        pesanError = null
+                        muat()
+                    }
                 }
             }
         )
     }
 
-    izinTarget?.let { k ->
-        DialogIzin(
-            karyawan = k,
+    qrTarget?.let { s ->
+        val bmp = remember(s.nis) { buatQrBitmap(s.nis, 480) }
+        AlertDialog(
+            onDismissRequest = { qrTarget = null },
+            title = { Text("QR Code — ${s.nama}") },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (bmp != null) {
+                        Image(
+                            bitmap = bmp.asImageBitmap(),
+                            contentDescription = "QR ${s.nis}",
+                            modifier = Modifier.size(220.dp)
+                        )
+                    }
+                    Text("NIS / Kode: ${s.nis}")
+                    Text("Kelas: ${s.kelas.ifBlank { "-" }}")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { qrTarget = null }) { Text("Tutup") }
+            }
+        )
+    }
+
+    izinTarget?.let { s ->
+        DialogIzinSiswa(
+            siswa = s,
             onBatal = { izinTarget = null },
             onSimpan = { tanggal, jenis, keterangan ->
                 scope.launch {
-                    repo.catatIzin(k.id, tanggal, jenis, keterangan)
+                    repo.catatIzin(s.id, tanggal, jenis, keterangan)
                     izinTarget = null
                 }
             }
@@ -201,54 +263,76 @@ fun KaryawanScreen(repo: Repository) {
 }
 
 @Composable
-private fun DialogKaryawan(
-    awal: KaryawanEntity?,
+private fun DialogSiswa(
+    awal: SiswaEntity?,
+    error: String?,
     onBatal: () -> Unit,
-    onSimpan: (String, String, Shift) -> Unit
+    onSimpan: (String, String, String, String, JamSekolah) -> Unit
 ) {
     var nama by remember { mutableStateOf(awal?.nama ?: "") }
-    var jabatan by remember { mutableStateOf(awal?.jabatan ?: "") }
-    var shift by remember { mutableStateOf(awal?.let { Shift.dariNama(it.shift) } ?: Shift.SHIFT_1) }
+    var nis by remember { mutableStateOf(awal?.nis ?: "") }
+    var kelas by remember { mutableStateOf(awal?.kelas ?: "") }
+    var noWa by remember { mutableStateOf(awal?.noWaOrtu ?: "") }
+    var sesi by remember { mutableStateOf(awal?.let { JamSekolah.dariNama(it.sesi) } ?: JamSekolah.PAGI) }
     var salah by remember { mutableStateOf(false) }
+
     AlertDialog(
         onDismissRequest = onBatal,
-        title = { Text(if (awal == null) "Tambah Karyawan" else "Ubah Karyawan") },
+        title = { Text(if (awal == null) "Tambah Siswa" else "Ubah Siswa") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = nama,
                     onValueChange = { nama = it; salah = false },
-                    label = { Text("Nama") },
+                    label = { Text("Nama siswa") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
-                    value = jabatan,
-                    onValueChange = { jabatan = it },
-                    label = { Text("Jabatan") },
+                    value = nis,
+                    onValueChange = { nis = it; salah = false },
+                    label = { Text("NIS / Kode Barcode") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = kelas,
+                    onValueChange = { kelas = it },
+                    label = { Text("Kelas (mis. 7A)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = noWa,
+                    onValueChange = { noWa = it },
+                    label = { Text("No. WA Orang Tua (08...)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Shift.entries.forEach { s ->
+                    JamSekolah.entries.forEach { j ->
                         FilterChip(
-                            selected = shift == s,
-                            onClick = { shift = s },
-                            label = { Text(s.label) }
+                            selected = sesi == j,
+                            onClick = { sesi = j },
+                            label = { Text(j.label) }
                         )
                     }
                 }
                 if (salah) {
-                    Text("Nama tidak boleh kosong.", color = MaterialTheme.colorScheme.error)
+                    Text("Nama dan NIS tidak boleh kosong.", color = MaterialTheme.colorScheme.error)
+                }
+                if (error != null) {
+                    Text(error, color = MaterialTheme.colorScheme.error)
                 }
             }
         },
         confirmButton = {
             TextButton(onClick = {
-                if (nama.isBlank()) {
+                if (nama.isBlank() || nis.isBlank()) {
                     salah = true
                 } else {
-                    onSimpan(nama, jabatan.ifBlank { "-" }, shift)
+                    onSimpan(nama.trim(), nis.trim(), kelas.trim(), noWa.trim(), sesi)
                 }
             }) { Text("Simpan") }
         },
@@ -260,61 +344,66 @@ private fun DialogKaryawan(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DialogIzin(
-    karyawan: KaryawanEntity,
+private fun DialogIzinSiswa(
+    siswa: SiswaEntity,
     onBatal: () -> Unit,
     onSimpan: (String, String, String) -> Unit
 ) {
-    var jenis by remember { mutableStateOf("IZIN") }
-    var tanggal by remember { mutableStateOf(LocalDate.parse(tanggalHariIni())) }
-    var keterangan by remember { mutableStateOf("") }
+    var tanggal by remember { mutableStateOf(tanggalHariIni()) }
     var pilihTanggal by remember { mutableStateOf(false) }
+    var jenis by remember { mutableStateOf("IZIN") }
+    var keterangan by remember { mutableStateOf("") }
+
     AlertDialog(
         onDismissRequest = onBatal,
-        title = { Text("Izin — ${karyawan.nama}") },
+        title = { Text("Izin — ${siswa.nama}") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = { pilihTanggal = true }) {
+                    Text("Tanggal: ${formatTanggalIndonesia(tanggal)}")
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("IZIN", "SAKIT", "CUTI").forEach { j ->
+                    listOf("IZIN", "SAKIT").forEach { j ->
                         FilterChip(
                             selected = jenis == j,
                             onClick = { jenis = j },
-                            label = { Text(j.lowercase().replaceFirstChar { it.uppercase() }) }
+                            label = { Text(j) }
                         )
                     }
-                }
-                Text(text = "Tanggal: ${formatTanggalIndonesia(tanggal.toString())}")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = { tanggal = LocalDate.now() }) { Text("Hari ini") }
-                    TextButton(onClick = { tanggal = LocalDate.now().plusDays(1) }) { Text("Besok") }
-                    TextButton(onClick = { pilihTanggal = true }) { Text("Pilih tanggal") }
                 }
                 OutlinedTextField(
                     value = keterangan,
                     onValueChange = { keterangan = it },
-                    label = { Text("Keterangan (boleh kosong)") },
+                    label = { Text("Keterangan (opsional)") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSimpan(tanggal.toString(), jenis, keterangan) }) { Text("Simpan") }
+            TextButton(onClick = { onSimpan(tanggal, jenis, keterangan) }) { Text("Simpan") }
         },
         dismissButton = {
             TextButton(onClick = onBatal) { Text("Batal") }
         }
     )
+
     if (pilihTanggal) {
         val state = rememberDatePickerState(
-            initialSelectedDateMillis = tanggal.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            initialSelectedDateMillis = LocalDate.parse(tanggal)
+                .atStartOfDay(ZoneId.of("UTC"))
+                .toInstant()
+                .toEpochMilli()
         )
         DatePickerDialog(
             onDismissRequest = { pilihTanggal = false },
             confirmButton = {
                 TextButton(onClick = {
-                    state.selectedDateMillis?.let {
-                        tanggal = Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate()
+                    state.selectedDateMillis?.let { millis ->
+                        tanggal = Instant.ofEpochMilli(millis)
+                            .atZone(ZoneId.of("UTC"))
+                            .toLocalDate()
+                            .toString()
                     }
                     pilihTanggal = false
                 }) { Text("Pilih") }

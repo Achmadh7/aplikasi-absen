@@ -1,5 +1,7 @@
 package id.absensi.app.data
 
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
@@ -7,17 +9,17 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-/** Jam kerja. Shift 1 08.00-15.00, shift 2 16.00-22.00. */
-enum class Shift(val label: String, val masukMenit: Int, val pulangMenit: Int) {
-    SHIFT_1("Shift 1", 8 * 60, 15 * 60),
-    SHIFT_2("Shift 2", 16 * 60, 22 * 60);
+/** Jam sekolah. Pagi 07.00-13.00, Siang 13.00-17.00. */
+enum class JamSekolah(val label: String, val masukMenit: Int, val pulangMenit: Int) {
+    PAGI("Pagi", 7 * 60, 13 * 60),
+    SIANG("Siang", 13 * 60, 17 * 60);
 
     companion object {
-        fun dariNama(nama: String): Shift = entries.firstOrNull { it.name == nama } ?: SHIFT_1
+        fun dariNama(nama: String): JamSekolah = entries.firstOrNull { it.name == nama } ?: PAGI
     }
 }
 
-enum class StatusHadir { BELUM, HADIR, TERLAMBAT, IZIN, SAKIT, CUTI, ALPA }
+enum class StatusHadir { BELUM, HADIR, TERLAMBAT, IZIN, SAKIT, ALPA }
 
 fun labelStatus(status: StatusHadir): String = when (status) {
     StatusHadir.BELUM -> "Belum absen"
@@ -25,7 +27,6 @@ fun labelStatus(status: StatusHadir): String = when (status) {
     StatusHadir.TERLAMBAT -> "Terlambat"
     StatusHadir.IZIN -> "Izin"
     StatusHadir.SAKIT -> "Sakit"
-    StatusHadir.CUTI -> "Cuti"
     StatusHadir.ALPA -> "Alpa"
 }
 
@@ -67,7 +68,49 @@ fun parseJamMenit(teks: String): Int? {
     return jam * 60 + menit
 }
 
-/** Semua hari kerja (Senin-Jumat) di bulan `prefix` ("yyyy-MM") sampai tanggal `sampai`. */
+/**
+ * Normalisasi nomor WhatsApp Indonesia ke format internasional tanpa '+' (contoh: 08123456789 -> 628123456789).
+ * Mengembalikan null bila kosong atau terlalu pendek (< 9 digit).
+ */
+fun normalisasiNomorWa(nomor: String): String? {
+    val digit = nomor.filter { it.isDigit() }
+    if (digit.length < 9) return null
+    val hasil = when {
+        digit.startsWith("62") -> digit
+        digit.startsWith("0") -> "62" + digit.drop(1)
+        digit.startsWith("8") -> "62$digit"
+        else -> digit
+    }
+    return if (hasil.length in 10..16) hasil else null
+}
+
+/** Susun pesan notifikasi absensi untuk dikirim ke WhatsApp orang tua. */
+fun buatPesanWaAbsen(
+    namaSiswa: String,
+    kelas: String,
+    status: StatusHadir,
+    jamMenit: Int,
+    pulang: Boolean,
+    tanggalIso: String
+): String {
+    val infoKelas = if (kelas.isNotBlank()) " ($kelas)" else ""
+    val jam = menitKeJam(jamMenit)
+    val tgl = formatTanggalIndonesia(tanggalIso)
+    return if (pulang) {
+        "Halo Bapak/Ibu, menginformasikan ananda $namaSiswa$infoKelas telah absen PULANG pada pukul $jam ($tgl)."
+    } else {
+        "Halo Bapak/Ibu, menginformasikan ananda $namaSiswa$infoKelas telah absen MASUK pada pukul $jam ($tgl) dengan status ${labelStatus(status)}."
+    }
+}
+
+/** Buat URL deep-link https://wa.me/<nomor>?text=<pesan>. Null bila nomor WA tidak valid. */
+fun buatUrlWa(nomorWa: String, pesan: String): String? {
+    val norm = normalisasiNomorWa(nomorWa) ?: return null
+    val encoded = URLEncoder.encode(pesan, StandardCharsets.UTF_8.toString()).replace("+", "%20")
+    return "https://wa.me/$norm?text=$encoded"
+}
+
+/** Semua hari sekolah (Senin-Jumat) di bulan `prefix` ("yyyy-MM") sampai tanggal `sampai`. */
 fun hariKerjaBulan(prefix: String, sampai: LocalDate = LocalDate.now()): List<LocalDate> {
     val ym = YearMonth.parse(prefix)
     val akhir = minOf(ym.atEndOfMonth(), sampai)
@@ -80,38 +123,34 @@ fun hariKerjaBulan(prefix: String, sampai: LocalDate = LocalDate.now()): List<Lo
     return hasil
 }
 
-/** Satu baris riwayat harian untuk layar detail per karyawan. */
+/** Satu baris riwayat harian untuk layar detail per siswa. */
 data class RiwayatHari(
     val tanggal: String,
     val status: StatusHadir,
     val masukMenit: Int?,
     val pulangMenit: Int?,
-    /** Menit lewat jam masuk shift, hanya bila TERLAMBAT. */
+    /** Menit lewat jam masuk sekolah, hanya bila TERLAMBAT. */
     val terlambatMenit: Int = 0
 )
 
-/** Baris riwayat satu karyawan selama satu bulan — murni (bisa dites).
+/** Baris riwayat satu siswa selama satu bulan — murni (bisa dites).
  * Izin didahulukan; tanpa catatan masuk dan tanpa izin = ALPA. */
 fun barisRiwayat(
-    karyawan: KaryawanEntity,
+    siswa: SiswaEntity,
     absensi: List<AbsensiEntity>,
     izin: List<IzinEntity>,
     prefix: String,
     sampai: LocalDate,
     toleransiMenit: Int
 ): List<RiwayatHari> {
-    val shift = Shift.dariNama(karyawan.shift)
+    val sesi = JamSekolah.dariNama(siswa.sesi)
     val absPerTanggal = absensi.associateBy { it.tanggal }
     val izinPerTanggal = izin.associateBy { it.tanggal }
     return hariKerjaBulan(prefix, sampai).map { d ->
         val tgl = d.toString()
         val iz = izinPerTanggal[tgl]
         if (iz != null) {
-            val s = when (iz.jenis) {
-                "SAKIT" -> StatusHadir.SAKIT
-                "CUTI" -> StatusHadir.CUTI
-                else -> StatusHadir.IZIN
-            }
+            val s = if (iz.jenis == "SAKIT") StatusHadir.SAKIT else StatusHadir.IZIN
             RiwayatHari(tgl, s, null, null)
         } else {
             val a = absPerTanggal[tgl]
@@ -119,42 +158,52 @@ fun barisRiwayat(
             if (masuk == null) {
                 RiwayatHari(tgl, StatusHadir.ALPA, null, a?.pulangMenit)
             } else {
-                val s = statusMasuk(shift.masukMenit, masuk, toleransiMenit)
+                val s = statusMasuk(sesi.masukMenit, masuk, toleransiMenit)
                 RiwayatHari(
                     tgl, s, masuk, a?.pulangMenit,
-                    if (s == StatusHadir.TERLAMBAT) masuk - shift.masukMenit else 0
+                    if (s == StatusHadir.TERLAMBAT) masuk - sesi.masukMenit else 0
                 )
             }
         }
     }
 }
 
-/** Baris karyawan di layar Absen. */
-data class KaryawanAbsenUi(
+/** Baris siswa di layar Absen. */
+data class SiswaAbsenUi(
     val id: Long,
     val nama: String,
-    val jabatan: String,
-    val shift: Shift,
+    val nis: String,
+    val kelas: String,
+    val noWaOrtu: String,
+    val sesi: JamSekolah,
     val status: StatusHadir,
     val masukMenit: Int?,
     val pulangMenit: Int?
 )
 
-/** Rekap satu karyawan selama satu bulan. */
-data class RekapKaryawan(
-    val karyawanId: Long,
+/** Hasil pemindaian barcode/QR untuk ditampilkan & dikirim ke WA orang tua. */
+data class HasilScanAbsen(
+    val siswa: SiswaEntity,
+    val status: StatusHadir,
+    val jamMenit: Int,
+    val baruPulang: Boolean,
+    val sudahSelesaiHariIni: Boolean
+)
+
+/** Rekap satu siswa selama satu bulan. */
+data class RekapSiswa(
+    val siswaId: Long,
     val nama: String,
-    val jabatan: String,
+    val kelas: String,
     val hadir: Int,
     val terlambat: Int,
     val izin: Int,
     val sakit: Int,
-    val cuti: Int,
     val alpa: Int
 ) {
     val persenHadir: Int
         get() {
-            val total = hadir + terlambat + izin + sakit + cuti + alpa
+            val total = hadir + terlambat + izin + sakit + alpa
             if (total == 0) return 100
             return ((hadir + terlambat) * 100) / total
         }

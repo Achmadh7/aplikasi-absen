@@ -31,7 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import id.absensi.app.data.RekapKaryawan
+import id.absensi.app.data.RekapSiswa
 import id.absensi.app.data.Repository
 import id.absensi.app.data.formatBulanIndonesia
 import id.absensi.app.ui.KacaCard
@@ -39,9 +39,9 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
 @Composable
-fun RekapScreen(repo: Repository, toleransiMenit: Int, onKaryawan: (Long, String) -> Unit) {
+fun RekapScreen(repo: Repository, toleransiMenit: Int, onSiswa: (Long, String) -> Unit) {
     var bulan by remember { mutableStateOf(YearMonth.now()) }
-    var rekap by remember { mutableStateOf<List<RekapKaryawan>>(emptyList()) }
+    var rekap by remember { mutableStateOf<List<RekapSiswa>>(emptyList()) }
     val prefix = bulan.format(DateTimeFormatter.ofPattern("yyyy-MM"))
 
     LaunchedEffect(bulan) {
@@ -50,7 +50,7 @@ fun RekapScreen(repo: Repository, toleransiMenit: Int, onKaryawan: (Long, String
 
     val totalHadir = rekap.sumOf { it.hadir }
     val totalTelat = rekap.sumOf { it.terlambat }
-    val totalIzin = rekap.sumOf { it.izin + it.sakit + it.cuti }
+    val totalIzin = rekap.sumOf { it.izin + it.sakit }
     val totalAlpa = rekap.sumOf { it.alpa }
 
     Column(
@@ -86,12 +86,12 @@ fun RekapScreen(repo: Repository, toleransiMenit: Int, onKaryawan: (Long, String
         }
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            KartuRingkasan("Izin/Sakit/Cuti", totalIzin.toString(), Color(0xFF2E5A88), Color(0xFFD3E3F3), Modifier.weight(1f))
+            KartuRingkasan("Izin/Sakit", totalIzin.toString(), Color(0xFF2E5A88), Color(0xFFD3E3F3), Modifier.weight(1f))
             KartuRingkasan("Alpa", totalAlpa.toString(), Color(0xFFB3261E), Color(0xFFFDECEA), Modifier.weight(1f))
         }
         Spacer(Modifier.height(16.dp))
         Text(
-            text = "Per karyawan",
+            text = "Per siswa",
             fontWeight = FontWeight.Bold,
             fontSize = 16.sp
         )
@@ -99,26 +99,29 @@ fun RekapScreen(repo: Repository, toleransiMenit: Int, onKaryawan: (Long, String
         if (rekap.isEmpty()) {
             KacaCard(Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Belum ada karyawan.",
+                    text = "Belum ada siswa.",
                     modifier = Modifier.padding(16.dp)
                 )
             }
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(rekap, key = { it.karyawanId }) { r ->
+                items(rekap, key = { it.siswaId }) { r ->
                     KacaCard(
                         Modifier
                             .fillMaxWidth()
-                            .clickable { onKaryawan(r.karyawanId, prefix) }
+                            .clickable { onSiswa(r.siswaId, prefix) }
                     ) {
                         Row(
                             modifier = Modifier.padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(text = r.nama, fontWeight = FontWeight.Bold)
                                 Text(
-                                    text = "H ${r.hadir}  •  T ${r.terlambat}  •  I ${r.izin}  •  S ${r.sakit}  •  C ${r.cuti}  •  A ${r.alpa}",
+                                    text = if (r.kelas.isNotBlank()) "${r.nama} (${r.kelas})" else r.nama,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "H ${r.hadir}  •  T ${r.terlambat}  •  I ${r.izin}  •  S ${r.sakit}  •  A ${r.alpa}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

@@ -50,10 +50,10 @@ import id.absensi.app.data.Repository
 import id.absensi.app.data.cekPembaruan
 import id.absensi.app.data.versiAplikasi
 import id.absensi.app.ui.screens.AbsenScreen
-import id.absensi.app.ui.screens.KaryawanScreen
 import id.absensi.app.ui.screens.LainnyaScreen
 import id.absensi.app.ui.screens.RekapScreen
-import id.absensi.app.ui.screens.RiwayatKaryawanScreen
+import id.absensi.app.ui.screens.RiwayatSiswaScreen
+import id.absensi.app.ui.screens.SiswaScreen
 import id.absensi.app.ui.theme.AbsensiTheme
 import id.absensi.app.ui.theme.AuroraBackground
 import kotlinx.coroutines.delay
@@ -84,7 +84,6 @@ private fun AbsensiApp(prefs: SharedPreferences) {
         repo = Repository(db)
     }
 
-    // Pop-up absen hilang sendiri setelah 2,6 detik (gaya badge "Tersinkron" Kasir).
     LaunchedEffect(notifAbsen) {
         if (notifAbsen != null) {
             delay(2600)
@@ -92,8 +91,6 @@ private fun AbsensiApp(prefs: SharedPreferences) {
         }
     }
 
-    // Cek pembaruan diam-diam saat aplikasi dibuka; hasilnya hanya tampil
-    // di kartu Pembaruan pada tab Lainnya (layar Absen tidak terganggu).
     LaunchedEffect(Unit) {
         pembaruanOtomatis = cekPembaruan(versiAplikasi(context))
     }
@@ -102,33 +99,32 @@ private fun AbsensiApp(prefs: SharedPreferences) {
         AuroraBackground(isDark = gelap) {
             Scaffold(
                 bottomBar = {
-                    // Layar detail riwayat menutupi tab — nav bawah disembunyikan.
                     if (riwayatTarget == null) {
                         NavigationBar {
-                        NavigationBarItem(
-                            selected = tab == 0,
-                            onClick = { tab = 0 },
-                            icon = { Icon(Icons.Filled.CheckCircle, contentDescription = "Absen") },
-                            label = { Text("Absen") }
-                        )
-                        NavigationBarItem(
-                            selected = tab == 1,
-                            onClick = { tab = 1 },
-                            icon = { Icon(Icons.Filled.BarChart, contentDescription = "Rekap") },
-                            label = { Text("Rekap") }
-                        )
-                        NavigationBarItem(
-                            selected = tab == 2,
-                            onClick = { tab = 2 },
-                            icon = { Icon(Icons.Filled.Group, contentDescription = "Karyawan") },
-                            label = { Text("Karyawan") }
-                        )
-                        NavigationBarItem(
-                            selected = tab == 3,
-                            onClick = { tab = 3 },
-                            icon = { Icon(Icons.Filled.Settings, contentDescription = "Lainnya") },
-                            label = { Text("Lainnya") }
-                        )
+                            NavigationBarItem(
+                                selected = tab == 0,
+                                onClick = { tab = 0 },
+                                icon = { Icon(Icons.Filled.CheckCircle, contentDescription = "Absen") },
+                                label = { Text("Absen") }
+                            )
+                            NavigationBarItem(
+                                selected = tab == 1,
+                                onClick = { tab = 1 },
+                                icon = { Icon(Icons.Filled.BarChart, contentDescription = "Rekap") },
+                                label = { Text("Rekap") }
+                            )
+                            NavigationBarItem(
+                                selected = tab == 2,
+                                onClick = { tab = 2 },
+                                icon = { Icon(Icons.Filled.Group, contentDescription = "Siswa") },
+                                label = { Text("Siswa") }
+                            )
+                            NavigationBarItem(
+                                selected = tab == 3,
+                                onClick = { tab = 3 },
+                                icon = { Icon(Icons.Filled.Settings, contentDescription = "Lainnya") },
+                                label = { Text("Lainnya") }
+                            )
                         }
                     }
                 }
@@ -149,9 +145,9 @@ private fun AbsensiApp(prefs: SharedPreferences) {
                     } else {
                         val target = riwayatTarget
                         when {
-                            target != null -> RiwayatKaryawanScreen(
+                            target != null -> RiwayatSiswaScreen(
                                 repo = r,
-                                karyawanId = target.first,
+                                siswaId = target.first,
                                 prefix = target.second,
                                 toleransiMenit = toleransi,
                                 onBack = { riwayatTarget = null },
@@ -159,8 +155,8 @@ private fun AbsensiApp(prefs: SharedPreferences) {
                             )
                             else -> when (tab) {
                                 0 -> AbsenScreen(r, toleransi) { notifAbsen = it }
-                                1 -> RekapScreen(r, toleransi) { kid, pref -> riwayatTarget = kid to pref }
-                                2 -> KaryawanScreen(r)
+                                1 -> RekapScreen(r, toleransi) { sid, pref -> riwayatTarget = sid to pref }
+                                2 -> SiswaScreen(r)
                                 3 -> LainnyaScreen(
                                     repo = r,
                                     toleransiMenit = toleransi,
@@ -173,9 +169,6 @@ private fun AbsensiApp(prefs: SharedPreferences) {
                             }
                         }
                     }
-                    // Pop-up absen: anak langsung Box layar penuh supaya
-                    // benar-benar di tengah atas (align di dalam Scaffold
-                    // tidak berpengaruh — pelajaran dari badge Apotek).
                     NotifAbsenPopUp(
                         modifier = Modifier
                             .align(Alignment.TopCenter)
@@ -190,7 +183,6 @@ private fun AbsensiApp(prefs: SharedPreferences) {
     }
 }
 
-/** Pil mengambang gaya badge "Tersinkron" Kasir: navy + ikon centang cyan. */
 @Composable
 private fun NotifAbsenPopUp(
     modifier: Modifier = Modifier,

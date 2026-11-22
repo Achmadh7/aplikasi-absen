@@ -2,17 +2,22 @@ package id.absensi.app
 
 import id.absensi.app.data.AbsensiEntity
 import id.absensi.app.data.IzinEntity
-import id.absensi.app.data.KaryawanEntity
-import id.absensi.app.data.Shift
+import id.absensi.app.data.JamSekolah
+import id.absensi.app.data.SiswaEntity
 import id.absensi.app.data.StatusHadir
 import id.absensi.app.data.barisRiwayat
+import id.absensi.app.data.buatPesanWaAbsen
+import id.absensi.app.data.buatUrlWa
 import id.absensi.app.data.formatBulanIndonesia
 import id.absensi.app.data.formatTanggalIndonesia
 import id.absensi.app.data.hariKerjaBulan
 import id.absensi.app.data.menitKeJam
+import id.absensi.app.data.normalisasiNomorWa
 import id.absensi.app.data.parseJamMenit
 import id.absensi.app.data.statusMasuk
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
 
@@ -20,37 +25,37 @@ class AbsensiLogicTest {
 
     @Test
     fun menitKeJam_formatBenar() {
-        assertEquals("08.00", menitKeJam(480))
+        assertEquals("07.00", menitKeJam(420))
         assertEquals("08.05", menitKeJam(485))
-        assertEquals("15.00", menitKeJam(900))
-        assertEquals("22.00", menitKeJam(1320))
+        assertEquals("13.00", menitKeJam(780))
+        assertEquals("17.00", menitKeJam(1020))
         assertEquals("00.00", menitKeJam(0))
     }
 
     @Test
-    fun shift_jamKerjaBenar() {
-        assertEquals(480, Shift.SHIFT_1.masukMenit)
-        assertEquals(900, Shift.SHIFT_1.pulangMenit)
-        assertEquals(960, Shift.SHIFT_2.masukMenit)
-        assertEquals(1320, Shift.SHIFT_2.pulangMenit)
+    fun jamSekolah_benar() {
+        assertEquals(420, JamSekolah.PAGI.masukMenit)
+        assertEquals(780, JamSekolah.PAGI.pulangMenit)
+        assertEquals(780, JamSekolah.SIANG.masukMenit)
+        assertEquals(1020, JamSekolah.SIANG.pulangMenit)
     }
 
     @Test
     fun statusMasuk_tepatWaktuAdalahHadir() {
-        assertEquals(StatusHadir.HADIR, statusMasuk(480, 480, 15))
-        assertEquals(StatusHadir.HADIR, statusMasuk(480, 495, 15))
+        assertEquals(StatusHadir.HADIR, statusMasuk(420, 420, 15))
+        assertEquals(StatusHadir.HADIR, statusMasuk(420, 435, 15))
     }
 
     @Test
     fun statusMasuk_lewatToleransiAdalahTerlambat() {
-        assertEquals(StatusHadir.TERLAMBAT, statusMasuk(480, 496, 15))
-        assertEquals(StatusHadir.TERLAMBAT, statusMasuk(480, 540, 15))
+        assertEquals(StatusHadir.TERLAMBAT, statusMasuk(420, 436, 15))
+        assertEquals(StatusHadir.TERLAMBAT, statusMasuk(420, 480, 15))
     }
 
     @Test
     fun statusMasuk_toleransiNol() {
-        assertEquals(StatusHadir.HADIR, statusMasuk(960, 960, 0))
-        assertEquals(StatusHadir.TERLAMBAT, statusMasuk(960, 961, 0))
+        assertEquals(StatusHadir.HADIR, statusMasuk(780, 780, 0))
+        assertEquals(StatusHadir.TERLAMBAT, statusMasuk(780, 781, 0))
     }
 
     @Test
@@ -65,7 +70,6 @@ class AbsensiLogicTest {
 
     @Test
     fun hariKerjaBulan_november2026_21Hari() {
-        // November 2026: 1 Nov = Minggu; hari kerja sampai 30 Nov = 21 hari.
         val hari = hariKerjaBulan("2026-11", LocalDate.of(2026, 11, 30))
         assertEquals(21, hari.size)
     }
@@ -73,7 +77,6 @@ class AbsensiLogicTest {
     @Test
     fun hariKerjaBulan_tidakTermasukAkhirPekan() {
         val hari = hariKerjaBulan("2026-11", LocalDate.of(2026, 11, 8))
-        // 2-6 Nov (Senin-Jumat) = 5 hari; 7-8 Nov akhir pekan.
         assertEquals(5, hari.size)
     }
 
@@ -87,37 +90,72 @@ class AbsensiLogicTest {
 
     @Test
     fun parseJamMenit_formatSalahNull() {
-        assertEquals(null, parseJamMenit("24.00"))
-        assertEquals(null, parseJamMenit("08.60"))
-        assertEquals(null, parseJamMenit("abc"))
-        assertEquals(null, parseJamMenit(""))
-        assertEquals(null, parseJamMenit("8.5"))
-        assertEquals(null, parseJamMenit("08.05.00"))
+        assertNull(parseJamMenit("24.00"))
+        assertNull(parseJamMenit("08.60"))
+        assertNull(parseJamMenit("abc"))
+        assertNull(parseJamMenit(""))
+        assertNull(parseJamMenit("8.5"))
+        assertNull(parseJamMenit("08.05.00"))
     }
 
-    private fun karyawanTes() = KaryawanEntity(id = 1, nama = "Budi", jabatan = "Staff", shift = "SHIFT_1")
+    @Test
+    fun normalisasiNomorWa_formatIndonesia() {
+        assertEquals("6281234567890", normalisasiNomorWa("0812-3456-7890"))
+        assertEquals("6281234567890", normalisasiNomorWa("+62 812 3456 7890"))
+        assertEquals("6281234567890", normalisasiNomorWa("6281234567890"))
+        assertEquals("6281234567890", normalisasiNomorWa("81234567890"))
+        assertNull(normalisasiNomorWa("0812"))
+        assertNull(normalisasiNomorWa(""))
+    }
+
+    @Test
+    fun buatUrlWa_validDanTerencode() {
+        val pesan = buatPesanWaAbsen(
+            namaSiswa = "Budi",
+            kelas = "7A",
+            status = StatusHadir.HADIR,
+            jamMenit = 415,
+            pulang = false,
+            tanggalIso = "2026-11-12"
+        )
+        assertTrue(pesan.contains("Budi (7A)"))
+        assertTrue(pesan.contains("MASUK"))
+        assertTrue(pesan.contains("06.55"))
+        val url = buatUrlWa("081234567890", pesan)
+        assertTrue(url!!.startsWith("https://wa.me/6281234567890?text="))
+        assertNull(buatUrlWa("123", pesan))
+    }
+
+    private fun siswaTes() = SiswaEntity(
+        id = 1,
+        nama = "Budi",
+        nis = "2026001",
+        kelas = "7A",
+        noWaOrtu = "081234567890",
+        sesi = "PAGI"
+    )
 
     private fun absensiTes() = listOf(
-        AbsensiEntity(id = 1, karyawanId = 1, tanggal = "2026-11-02", masukMenit = 480),
-        AbsensiEntity(id = 2, karyawanId = 1, tanggal = "2026-11-03", masukMenit = 500),
-        AbsensiEntity(id = 3, karyawanId = 1, tanggal = "2026-11-05", masukMenit = 470, pulangMenit = 900)
+        AbsensiEntity(id = 1, siswaId = 1, tanggal = "2026-11-02", masukMenit = 420),
+        AbsensiEntity(id = 2, siswaId = 1, tanggal = "2026-11-03", masukMenit = 440),
+        AbsensiEntity(id = 3, siswaId = 1, tanggal = "2026-11-05", masukMenit = 415, pulangMenit = 780)
     )
 
     private fun izinTes() = listOf(
-        IzinEntity(id = 1, karyawanId = 1, tanggal = "2026-11-04", jenis = "SAKIT")
+        IzinEntity(id = 1, siswaId = 1, tanggal = "2026-11-04", jenis = "SAKIT")
     )
 
     @Test
     fun barisRiwayat_statusBenar() {
         // 2-6 Nov 2026 = Senin-Jumat; 6 Nov tanpa catatan = ALPA.
-        val baris = barisRiwayat(karyawanTes(), absensiTes(), izinTes(), "2026-11", LocalDate.of(2026, 11, 6), 15)
+        val baris = barisRiwayat(siswaTes(), absensiTes(), izinTes(), "2026-11", LocalDate.of(2026, 11, 6), 15)
         assertEquals(5, baris.size)
         assertEquals(StatusHadir.HADIR, baris[0].status)
         assertEquals(StatusHadir.TERLAMBAT, baris[1].status)
         assertEquals(20, baris[1].terlambatMenit)
         assertEquals(StatusHadir.SAKIT, baris[2].status)
         assertEquals(StatusHadir.HADIR, baris[3].status)
-        assertEquals(900, baris[3].pulangMenit)
+        assertEquals(780, baris[3].pulangMenit)
         assertEquals(StatusHadir.ALPA, baris[4].status)
     }
 }

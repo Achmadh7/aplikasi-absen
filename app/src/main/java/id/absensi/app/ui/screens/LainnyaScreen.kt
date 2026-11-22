@@ -55,7 +55,7 @@ fun LainnyaScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var toleransiTeks by remember(toleransiMenit) { mutableStateOf(toleransiMenit.toString()) }
-    var jumlahKaryawan by remember { mutableStateOf(0) }
+    var jumlahSiswa by remember { mutableStateOf(0) }
 
     // Pembaruan aplikasi (GitHub Releases).
     val versiSaatIni = remember { versiAplikasi(context) }
@@ -88,7 +88,7 @@ fun LainnyaScreen(
     }
 
     LaunchedEffect(Unit) {
-        jumlahKaryawan = repo.jumlahKaryawanAktif()
+        jumlahSiswa = repo.jumlahSiswaAktif()
     }
 
     Column(
@@ -105,8 +105,8 @@ fun LainnyaScreen(
         KacaCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(text = "Pengaturan", fontWeight = FontWeight.Bold)
-                Text(text = "Shift 1 — 08.00–15.00")
-                Text(text = "Shift 2 — 16.00–22.00")
+                Text(text = "Sesi Pagi — 07.00–13.00")
+                Text(text = "Sesi Siang — 13.00–17.00")
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth()
@@ -157,9 +157,9 @@ fun LainnyaScreen(
         KacaCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(text = "Tentang", fontWeight = FontWeight.Bold)
-                Text(text = "Absensi — versi $versiSaatIni")
-                Text(text = "Aplikasi absensi karyawan. Satu HP di kantor, karyawan absen dengan tap nama.")
-                Text(text = "Karyawan aktif: $jumlahKaryawan")
+                Text(text = "Absensi Siswa — versi $versiSaatIni")
+                Text(text = "Aplikasi absensi siswa dengan scan barcode dan notifikasi WhatsApp orang tua.")
+                Text(text = "Siswa aktif: $jumlahSiswa")
             }
         }
         Spacer(Modifier.height(8.dp))

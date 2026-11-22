@@ -16,7 +16,7 @@ import id.absensi.app.data.StatusHadir
 import id.absensi.app.data.labelStatus
 import id.absensi.app.data.menitKeJam
 
-/** Kartu kaca R1: permukaan gelap + garis tepi tipis. */
+/** Kartu Bento: permukaan putih bersih + garis tepi tipis + elevasi halus. */
 @Composable
 fun KacaCard(
     modifier: Modifier = Modifier,
@@ -24,9 +24,10 @@ fun KacaCard(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shadowElevation = 1.dp,
         content = content
     )
 }

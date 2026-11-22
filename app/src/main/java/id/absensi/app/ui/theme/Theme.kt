@@ -13,7 +13,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
-/** R1 Kaca Aurora — tema gelap utama aplikasi Absensi. */
+/** Palet Bento Grid Modular (Opsi 1) + fallback Aurora. */
 val AuroraNavy = Color(0xFF070B14)
 val AuroraSurface = Color(0xFF0E1626)
 val AuroraCard = Color(0xFF16233A)
@@ -21,6 +21,15 @@ val AuroraOutline = Color(0xFF22364F)
 val AuroraCyan = Color(0xFF40C4FF)
 val AuroraViolet = Color(0xFFA78BFA)
 val AuroraTeal = Color(0xFF2DD4BF)
+
+val BentoBackground = Color(0xFFF4F6FB)
+val BentoSurface = Color(0xFFFFFFFF)
+val BentoOutline = Color(0xFFE5E7EB)
+val BentoIndigo = Color(0xFF4F46E5)
+val BentoIndigoLight = Color(0xFF6366F1)
+val BentoEmerald = Color(0xFF10B981)
+val BentoSlate = Color(0xFF0F172A)
+val BentoSlateMuted = Color(0xFF64748B)
 
 private val DarkScheme = darkColorScheme(
     primary = AuroraCyan,
@@ -36,25 +45,29 @@ private val DarkScheme = darkColorScheme(
 )
 
 private val LightScheme = lightColorScheme(
-    primary = Color(0xFF0284C7),
-    secondary = Color(0xFF6D28D9),
+    primary = BentoIndigo,
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFEEF2FF),
+    onPrimaryContainer = BentoIndigo,
+    secondary = BentoEmerald,
+    onSecondary = Color.White,
     tertiary = Color(0xFF0F766E),
-    background = Color(0xFFEDF2F8),
-    surface = Color.White,
-    surfaceVariant = Color(0xFFE8EDF3),
-    onBackground = Color(0xFF0F1B2D),
-    onSurface = Color(0xFF0F1B2D),
-    onSurfaceVariant = Color(0xFF5A6878),
-    outlineVariant = Color(0xFFDDE5EE)
+    background = BentoBackground,
+    surface = BentoSurface,
+    surfaceVariant = Color(0xFFF8FAFC),
+    onBackground = BentoSlate,
+    onSurface = BentoSlate,
+    onSurfaceVariant = BentoSlateMuted,
+    outlineVariant = BentoOutline
 )
 
-/** Latar aurora: 3 blob radial (cyan / violet / teal) di atas warna background. */
+/** Latar aplikasi: Bento off-white pada mode terang, aurora pada mode gelap. */
 @Composable
 fun AuroraBackground(isDark: Boolean, content: @Composable () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(if (isDark) AuroraNavy else Color(0xFFEDF2F8))
+            .background(if (isDark) AuroraNavy else BentoBackground)
     ) {
         if (isDark) {
             Canvas(modifier = Modifier.fillMaxSize()) {

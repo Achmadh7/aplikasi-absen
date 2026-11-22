@@ -10,11 +10,14 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -26,8 +29,10 @@ import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -56,6 +61,9 @@ import id.absensi.app.ui.screens.RiwayatSiswaScreen
 import id.absensi.app.ui.screens.SiswaScreen
 import id.absensi.app.ui.theme.AbsensiTheme
 import id.absensi.app.ui.theme.AuroraBackground
+import id.absensi.app.ui.theme.BentoEmerald
+import id.absensi.app.ui.theme.BentoIndigo
+import id.absensi.app.ui.theme.BentoSlate
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
@@ -71,7 +79,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun AbsensiApp(prefs: SharedPreferences) {
     val context = LocalContext.current
-    var gelap by remember { mutableStateOf(prefs.getBoolean("gelap", true)) }
+    val gelap = false
     var toleransi by remember { mutableIntStateOf(prefs.getInt("toleransi", 15)) }
     var tab by remember { mutableIntStateOf(0) }
     var riwayatTarget by remember { mutableStateOf<Pair<Long, String>?>(null) }
@@ -98,33 +106,62 @@ private fun AbsensiApp(prefs: SharedPreferences) {
     AbsensiTheme(darkTheme = gelap) {
         AuroraBackground(isDark = gelap) {
             Scaffold(
+                containerColor = Color.Transparent,
                 bottomBar = {
                     if (riwayatTarget == null) {
-                        NavigationBar {
-                            NavigationBarItem(
-                                selected = tab == 0,
-                                onClick = { tab = 0 },
-                                icon = { Icon(Icons.Filled.CheckCircle, contentDescription = "Absen") },
-                                label = { Text("Absen") }
-                            )
-                            NavigationBarItem(
-                                selected = tab == 1,
-                                onClick = { tab = 1 },
-                                icon = { Icon(Icons.Filled.BarChart, contentDescription = "Rekap") },
-                                label = { Text("Rekap") }
-                            )
-                            NavigationBarItem(
-                                selected = tab == 2,
-                                onClick = { tab = 2 },
-                                icon = { Icon(Icons.Filled.Group, contentDescription = "Siswa") },
-                                label = { Text("Siswa") }
-                            )
-                            NavigationBarItem(
-                                selected = tab == 3,
-                                onClick = { tab = 3 },
-                                icon = { Icon(Icons.Filled.Settings, contentDescription = "Lainnya") },
-                                label = { Text("Lainnya") }
-                            )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .navigationBarsPadding()
+                                .padding(horizontal = 16.dp, vertical = 10.dp)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(28.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                shadowElevation = 6.dp
+                            ) {
+                                val itemColors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = BentoIndigo,
+                                    selectedTextColor = BentoIndigo,
+                                    indicatorColor = BentoIndigo.copy(alpha = 0.12f),
+                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                NavigationBar(
+                                    containerColor = Color.Transparent,
+                                    tonalElevation = 0.dp
+                                ) {
+                                    NavigationBarItem(
+                                        selected = tab == 0,
+                                        onClick = { tab = 0 },
+                                        colors = itemColors,
+                                        icon = { Icon(Icons.Filled.CheckCircle, contentDescription = "Absen") },
+                                        label = { Text("Absen") }
+                                    )
+                                    NavigationBarItem(
+                                        selected = tab == 1,
+                                        onClick = { tab = 1 },
+                                        colors = itemColors,
+                                        icon = { Icon(Icons.Filled.BarChart, contentDescription = "Rekap") },
+                                        label = { Text("Rekap") }
+                                    )
+                                    NavigationBarItem(
+                                        selected = tab == 2,
+                                        onClick = { tab = 2 },
+                                        colors = itemColors,
+                                        icon = { Icon(Icons.Filled.Group, contentDescription = "Siswa") },
+                                        label = { Text("Siswa") }
+                                    )
+                                    NavigationBarItem(
+                                        selected = tab == 3,
+                                        onClick = { tab = 3 },
+                                        colors = itemColors,
+                                        icon = { Icon(Icons.Filled.Settings, contentDescription = "Lainnya") },
+                                        label = { Text("Lainnya") }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -197,7 +234,7 @@ private fun NotifAbsenPopUp(
     ) {
         Surface(
             shape = RoundedCornerShape(24.dp),
-            color = Color(0xFF1B3A5C),
+            color = BentoSlate,
             shadowElevation = 8.dp,
             modifier = Modifier.clickable { onTutup() }
         ) {
@@ -209,7 +246,7 @@ private fun NotifAbsenPopUp(
                 Icon(
                     Icons.Filled.CheckCircle,
                     contentDescription = null,
-                    tint = Color(0xFF40C4FF),
+                    tint = BentoEmerald,
                     modifier = Modifier.size(20.dp)
                 )
                 Text(

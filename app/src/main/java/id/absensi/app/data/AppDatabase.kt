@@ -29,6 +29,7 @@ data class SiswaEntity(
     /** JamSekolah.name */
     val sesi: String,
     val aktif: Boolean = true,
+    val synced: Boolean = false,
     val dibuat: Long = System.currentTimeMillis()
 )
 
@@ -51,6 +52,8 @@ data class AbsensiEntity(
     val tanggal: String,
     val masukMenit: Int? = null,
     val pulangMenit: Int? = null,
+    val synced: Boolean = false,
+    val waStatus: String = "pending",
     val dibuat: Long = System.currentTimeMillis()
 )
 
@@ -74,6 +77,7 @@ data class IzinEntity(
     /** IZIN atau SAKIT */
     val jenis: String,
     val keterangan: String = "",
+    val synced: Boolean = false,
     val dibuat: Long = System.currentTimeMillis()
 )
 
@@ -91,16 +95,25 @@ interface SiswaDao {
     @Query("SELECT * FROM siswa WHERE nis = :nis AND aktif = 1 LIMIT 1")
     suspend fun byNisAktif(nis: String): SiswaEntity?
 
+    @Query("SELECT * FROM siswa WHERE nis = :nis LIMIT 1")
+    suspend fun byNis(nis: String): SiswaEntity?
+
+    @Query("SELECT * FROM siswa WHERE synced = 0")
+    suspend fun belumSync(): List<SiswaEntity>
+
+    @Query("UPDATE siswa SET synced = 1 WHERE id = :id")
+    suspend fun tandaiSynced(id: Long)
+
     @Insert
     suspend fun insert(e: SiswaEntity): Long
 
     @Update
     suspend fun update(e: SiswaEntity)
 
-    @Query("UPDATE siswa SET aktif = 0 WHERE id = :id")
+    @Query("UPDATE siswa SET aktif = 0, synced = 0 WHERE id = :id")
     suspend fun nonaktifkan(id: Long)
 
-    @Query("UPDATE siswa SET aktif = 1 WHERE id = :id")
+    @Query("UPDATE siswa SET aktif = 1, synced = 0 WHERE id = :id")
     suspend fun aktifkan(id: Long)
 
     @Query("SELECT COUNT(*) FROM siswa WHERE aktif = 1")
@@ -117,6 +130,15 @@ interface AbsensiDao {
 
     @Query("SELECT * FROM absensi WHERE tanggal LIKE :prefix || '%'")
     suspend fun byBulan(prefix: String): List<AbsensiEntity>
+
+    @Query("SELECT * FROM absensi WHERE synced = 0")
+    suspend fun belumSync(): List<AbsensiEntity>
+
+    @Query("SELECT COUNT(*) FROM absensi WHERE synced = 0")
+    suspend fun jumlahBelumSync(): Int
+
+    @Query("UPDATE absensi SET synced = 1, waStatus = :waStatus WHERE id = :id")
+    suspend fun tandaiSynced(id: Long, waStatus: String)
 
     @Insert
     suspend fun insert(e: AbsensiEntity): Long
@@ -136,6 +158,12 @@ interface IzinDao {
     @Query("SELECT * FROM izin WHERE tanggal LIKE :prefix || '%'")
     suspend fun byBulan(prefix: String): List<IzinEntity>
 
+    @Query("SELECT * FROM izin WHERE synced = 0")
+    suspend fun belumSync(): List<IzinEntity>
+
+    @Query("UPDATE izin SET synced = 1 WHERE id = :id")
+    suspend fun tandaiSynced(id: Long)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(e: IzinEntity): Long
 
@@ -145,7 +173,7 @@ interface IzinDao {
 
 @Database(
     entities = [SiswaEntity::class, AbsensiEntity::class, IzinEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

@@ -21,18 +21,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Send
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -48,10 +43,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import id.absensi.app.data.HasilScanAbsen
 import id.absensi.app.data.Repository
 import id.absensi.app.data.SiswaAbsenUi
 import id.absensi.app.data.StatusHadir
+import id.absensi.app.data.SupabaseClient
 import id.absensi.app.data.buatPesanWaAbsen
 import id.absensi.app.data.formatTanggalIndonesia
 import id.absensi.app.data.labelStatus
@@ -59,9 +54,11 @@ import id.absensi.app.data.menitKeJam
 import id.absensi.app.data.menitSekarang
 import id.absensi.app.data.normalisasiNomorWa
 import id.absensi.app.data.tanggalHariIni
-import id.absensi.app.ui.BarcodeScannerView
+import id.absensi.app.ui.FilterCariKelas
 import id.absensi.app.ui.KacaCard
 import id.absensi.app.ui.StatusChip
+import id.absensi.app.ui.SyncConfigDialog
+import id.absensi.app.ui.SyncStatusPill
 import id.absensi.app.ui.bukaWhatsApp
 import id.absensi.app.ui.theme.BentoEmerald
 import id.absensi.app.ui.theme.BentoIndigo
@@ -71,19 +68,28 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
-fun AbsenScreen(repo: Repository, toleransiMenit: Int, onPesan: (String) -> Unit) {
+fun AbsenScreen(
+    repo: Repository,
+    toleransiMenit: Int,
+    autoBukaWa: Boolean,
+    onAutoBukaWaChange: (Boolean) -> Unit,
+    onBukaScanner: () -> Unit,
+    onPesan: (String) -> Unit
+) {
     val context = LocalContext.current
     var daftar by remember { mutableStateOf<List<SiswaAbsenUi>>(emptyList()) }
     var jamMenit by remember { mutableStateOf(menitSekarang()) }
-    var bukaScanner by remember { mutableStateOf(false) }
-    var autoBukaWa by remember { mutableStateOf(false) }
-    var hasilScan by remember { mutableStateOf<HasilScanAbsen?>(null) }
-    var kodeManual by remember { mutableStateOf("") }
+    var cari by remember { mutableStateOf("") }
+    var kelasDipilih by remember { mutableStateOf<String?>(null) }
+    var dialogSync by remember { mutableStateOf(false) }
+    var pendingSync by remember { mutableStateOf(0) }
+    val syncConfigured = remember(dialogSync) { SupabaseClient(context).prefs.isConfigured }
     val scope = rememberCoroutineScope()
     val tanggal = tanggalHariIni()
 
     suspend fun muat() {
         daftar = repo.daftarAbsenHariIni(tanggal, toleransiMenit)
+        pendingSync = repo.jumlahBelumSync()
     }
 
     LaunchedEffect(Unit) {
@@ -92,34 +98,6 @@ fun AbsenScreen(repo: Repository, toleransiMenit: Int, onPesan: (String) -> Unit
             delay(20_000)
             jamMenit = menitSekarang()
             muat()
-        }
-    }
-
-    fun prosesKodeBarcode(kode: String) {
-        scope.launch {
-            val hasil = repo.scanBarcodeAbsen(kode, menitSekarang(), toleransiMenit, tanggal)
-            if (hasil == null) {
-                onPesan("Barcode \"$kode\" tidak terdaftar.")
-                return@launch
-            }
-            muat()
-            val aksi = if (hasil.baruPulang || hasil.sudahSelesaiHariIni) "Pulang" else "Masuk"
-            onPesan("${hasil.siswa.nama} • $aksi ${menitKeJam(hasil.jamMenit)}")
-            if (autoBukaWa) {
-                val pesan = buatPesanWaAbsen(
-                    namaSiswa = hasil.siswa.nama,
-                    kelas = hasil.siswa.kelas,
-                    status = hasil.status,
-                    jamMenit = hasil.jamMenit,
-                    pulang = hasil.baruPulang || hasil.sudahSelesaiHariIni,
-                    tanggalIso = tanggal
-                )
-                if (!bukaWhatsApp(context, hasil.siswa.noWaOrtu, pesan)) {
-                    onPesan("Nomor WA orang tua ${hasil.siswa.nama} tidak valid.")
-                }
-            } else {
-                hasilScan = hasil
-            }
         }
     }
 
@@ -152,23 +130,51 @@ fun AbsenScreen(repo: Repository, toleransiMenit: Int, onPesan: (String) -> Unit
     val sudah = daftar.count { it.status == StatusHadir.HADIR || it.status == StatusHadir.TERLAMBAT }
     val telat = daftar.count { it.status == StatusHadir.TERLAMBAT }
     val rasioHadir = if (daftar.isNotEmpty()) sudah.toFloat() / daftar.size else 0f
+    val daftarKelas = remember(daftar) {
+        daftar.map { it.kelas.trim() }.filter { it.isNotBlank() }.distinct().sorted()
+    }
+    val daftarTampil = remember(daftar, cari, kelasDipilih) {
+        val q = cari.trim()
+        daftar.filter { s ->
+            val cocokKelas = kelasDipilih == null || s.kelas.trim() == kelasDipilih
+            val cocokCari = q.isEmpty() ||
+                s.nama.contains(q, ignoreCase = true) ||
+                s.nis.contains(q, ignoreCase = true) ||
+                s.kelas.contains(q, ignoreCase = true)
+            cocokKelas && cocokCari
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp, vertical = 14.dp)
     ) {
-        Text(
-            text = "Absensi Siswa",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.ExtraBold,
-            color = BentoSlate
-        )
-        Text(
-            text = formatTanggalIndonesia(tanggal),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = "Absensi Siswa",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = BentoSlate
+                )
+                Text(
+                    text = formatTanggalIndonesia(tanggal),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            SyncStatusPill(
+                configured = syncConfigured,
+                pendingCount = pendingSync,
+                syncing = false,
+                onClick = { dialogSync = true }
+            )
+        }
         Spacer(Modifier.height(14.dp))
 
         // Bento Grid baris 1: Jam live + Ringkasan hadir
@@ -266,7 +272,7 @@ fun AbsenScreen(repo: Repository, toleransiMenit: Int, onPesan: (String) -> Unit
                 modifier = Modifier
                     .weight(1.45f)
                     .height(92.dp)
-                    .clickable { bukaScanner = true },
+                    .clickable { onBukaScanner() },
                 shape = RoundedCornerShape(20.dp),
                 shadowElevation = 3.dp
             ) {
@@ -312,7 +318,7 @@ fun AbsenScreen(repo: Repository, toleransiMenit: Int, onPesan: (String) -> Unit
                 modifier = Modifier
                     .weight(1f)
                     .height(92.dp)
-                    .clickable { autoBukaWa = !autoBukaWa }
+                    .clickable { onAutoBukaWaChange(!autoBukaWa) }
             ) {
                 Column(
                     modifier = Modifier
@@ -339,7 +345,7 @@ fun AbsenScreen(repo: Repository, toleransiMenit: Int, onPesan: (String) -> Unit
                         )
                         Switch(
                             checked = autoBukaWa,
-                            onCheckedChange = { autoBukaWa = it },
+                            onCheckedChange = onAutoBukaWaChange,
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = Color.White,
                                 checkedTrackColor = BentoEmerald
@@ -366,11 +372,27 @@ fun AbsenScreen(repo: Repository, toleransiMenit: Int, onPesan: (String) -> Unit
                 )
             }
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(daftar, key = { it.id }) { s ->
+            FilterCariKelas(
+                cari = cari,
+                onCariChange = { cari = it },
+                daftarKelas = daftarKelas,
+                kelasDipilih = kelasDipilih,
+                onKelasChange = { kelasDipilih = it }
+            )
+            Spacer(Modifier.height(8.dp))
+            if (daftarTampil.isEmpty()) {
+                KacaCard(Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "Tidak ada siswa yang cocok.",
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(daftarTampil, key = { it.id }) { s ->
                     KacaCard(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -463,91 +485,15 @@ fun AbsenScreen(repo: Repository, toleransiMenit: Int, onPesan: (String) -> Unit
         }
     }
 
-    if (bukaScanner) {
-        AlertDialog(
-            onDismissRequest = { bukaScanner = false },
-            title = { Text("Scan Barcode Siswa") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    BarcodeScannerView(
-                        aktif = hasilScan == null,
-                        onTerbaca = { kode -> prosesKodeBarcode(kode) }
-                    )
-                    FilterChip(
-                        selected = autoBukaWa,
-                        onClick = { autoBukaWa = !autoBukaWa },
-                        label = { Text("Otomatis buka WA orang tua") }
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = kodeManual,
-                            onValueChange = { kodeManual = it },
-                            label = { Text("Atau ketik NIS") },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Button(
-                            onClick = {
-                                if (kodeManual.isNotBlank()) {
-                                    prosesKodeBarcode(kodeManual)
-                                    kodeManual = ""
-                                }
-                            }
-                        ) { Text("Cek") }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { bukaScanner = false }) { Text("Tutup") }
+    if (dialogSync) {
+        SyncConfigDialog(
+            pendingCount = pendingSync,
+            onDismiss = { dialogSync = false },
+            onSynced = { msg ->
+                onPesan(msg)
+                scope.launch { muat() }
             }
         )
     }
-
-    hasilScan?.let { h ->
-        val pulang = h.baruPulang || h.sudahSelesaiHariIni
-        val waValid = normalisasiNomorWa(h.siswa.noWaOrtu) != null
-        AlertDialog(
-            onDismissRequest = { hasilScan = null },
-            title = { Text(h.siswa.nama) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Kelas: ${h.siswa.kelas.ifBlank { "-" }} • NIS: ${h.siswa.nis}")
-                    Text(
-                        if (pulang) "Tercatat PULANG pukul ${menitKeJam(h.jamMenit)}"
-                        else "Tercatat MASUK pukul ${menitKeJam(h.jamMenit)} (${labelStatus(h.status)})"
-                    )
-                    if (!waValid) {
-                        Text(
-                            "Nomor WA orang tua belum diisi atau tidak valid.",
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                if (waValid) {
-                    TextButton(onClick = {
-                        val pesan = buatPesanWaAbsen(
-                            namaSiswa = h.siswa.nama,
-                            kelas = h.siswa.kelas,
-                            status = h.status,
-                            jamMenit = h.jamMenit,
-                            pulang = pulang,
-                            tanggalIso = tanggal
-                        )
-                        bukaWhatsApp(context, h.siswa.noWaOrtu, pesan)
-                        hasilScan = null
-                    }) {
-                        Text("Kirim WA Orang Tua")
-                    }
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { hasilScan = null }) { Text("Selesai") }
-            }
-        )
-    }
+}
 }

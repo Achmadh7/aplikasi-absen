@@ -3,9 +3,11 @@ package id.absensi.app
 import id.absensi.app.data.AbsensiEntity
 import id.absensi.app.data.IzinEntity
 import id.absensi.app.data.JamSekolah
+import id.absensi.app.data.RekapSiswa
 import id.absensi.app.data.SiswaEntity
 import id.absensi.app.data.StatusHadir
 import id.absensi.app.data.barisRiwayat
+import id.absensi.app.data.buatCsvRekap
 import id.absensi.app.data.buatPesanWaAbsen
 import id.absensi.app.data.buatUrlWa
 import id.absensi.app.data.formatBulanIndonesia
@@ -13,6 +15,7 @@ import id.absensi.app.data.formatTanggalIndonesia
 import id.absensi.app.data.hariKerjaBulan
 import id.absensi.app.data.menitKeJam
 import id.absensi.app.data.normalisasiNomorWa
+import id.absensi.app.data.parseCsvSiswa
 import id.absensi.app.data.parseJamMenit
 import id.absensi.app.data.statusMasuk
 import org.junit.Assert.assertEquals
@@ -157,5 +160,31 @@ class AbsensiLogicTest {
         assertEquals(StatusHadir.HADIR, baris[3].status)
         assertEquals(780, baris[3].pulangMenit)
         assertEquals(StatusHadir.ALPA, baris[4].status)
+    }
+
+    @Test
+    fun buatCsvRekap_headerDanEscapingBenar() {
+        val csv = buatCsvRekap(
+            listOf(
+                RekapSiswa(1, "Budi, S.", "7A", hadir = 18, terlambat = 2, izin = 0, sakit = 0, alpa = 0)
+            )
+        )
+        assertTrue(csv.startsWith("\uFEFFNama,Kelas,Hadir,Terlambat,Izin,Sakit,Alpa,Persen Hadir"))
+        assertTrue(csv.contains("\"Budi, S.\",7A,18,2,0,0,0,100%"))
+    }
+
+    @Test
+    fun parseCsvSiswa_dukungKomaTitikKomaDanHeader() {
+        val csv = "\uFEFFNama;NIS;Kelas;No WA;Sesi\n" +
+            "Budi;2026001;7A;08123456789;SIANG\n" +
+            "\"Siti, A.\";2026002;7B;;\n" +
+            ";2026003;7C;;PAGI\n"
+        val hasil = parseCsvSiswa(csv)
+        assertEquals(2, hasil.valid.size)
+        assertEquals(1, hasil.dilewati)
+        assertEquals("Budi", hasil.valid[0].nama)
+        assertEquals(JamSekolah.SIANG, hasil.valid[0].sesi)
+        assertEquals("Siti, A.", hasil.valid[1].nama)
+        assertEquals(JamSekolah.PAGI, hasil.valid[1].sesi)
     }
 }

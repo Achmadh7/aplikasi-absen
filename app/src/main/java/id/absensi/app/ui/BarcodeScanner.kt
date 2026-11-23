@@ -34,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -83,9 +84,13 @@ fun BarcodeScannerView(
     aktif: Boolean,
     onTerbaca: (String) -> Unit,
     modifier: Modifier = Modifier
+        .fillMaxWidth()
+        .height(260.dp)
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val aktifTerbaru by rememberUpdatedState(aktif)
+    val onTerbacaTerbaru by rememberUpdatedState(onTerbaca)
     var punyaIzin by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
@@ -102,9 +107,7 @@ fun BarcodeScannerView(
 
     if (!punyaIzin) {
         Surface(
-            modifier = modifier
-                .fillMaxWidth()
-                .height(220.dp),
+            modifier = modifier,
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surfaceVariant
         ) {
@@ -129,21 +132,20 @@ fun BarcodeScannerView(
 
     val executor = remember { Executors.newSingleThreadExecutor() }
     val scanner = remember { BarcodeScanning.getClient() }
+    var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
     var terakhirKode by remember { mutableStateOf("") }
     var terakhirWaktu by remember { mutableStateOf(0L) }
 
     DisposableEffect(Unit) {
         onDispose {
+            cameraProvider?.unbindAll()
             scanner.close()
             executor.shutdown()
         }
     }
 
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(260.dp)
-            .clip(RoundedCornerShape(16.dp))
+        modifier = modifier.clip(RoundedCornerShape(16.dp))
     ) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
@@ -152,6 +154,7 @@ fun BarcodeScannerView(
                 val future = ProcessCameraProvider.getInstance(ctx)
                 future.addListener({
                     val provider = future.get()
+                    cameraProvider = provider
                     val preview = Preview.Builder().build().also {
                         it.surfaceProvider = previewView.surfaceProvider
                     }
@@ -162,13 +165,13 @@ fun BarcodeScannerView(
                         prosesFrame(
                             imageProxy = imageProxy,
                             scanner = scanner,
-                            aktif = aktif,
+                            aktif = aktifTerbaru,
                             onKode = { kode ->
                                 val now = System.currentTimeMillis()
                                 if (kode != terakhirKode || now - terakhirWaktu > 2500L) {
                                     terakhirKode = kode
                                     terakhirWaktu = now
-                                    onTerbaca(kode)
+                                    onTerbacaTerbaru(kode)
                                 }
                             }
                         )

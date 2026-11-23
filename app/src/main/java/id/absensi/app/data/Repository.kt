@@ -5,7 +5,10 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
 /** Satu-satunya pintu data untuk UI. Semua akses Room lewat sini. */
-class Repository(private val db: AppDatabase) {
+class Repository(
+    private val db: AppDatabase,
+    private val onMutasi: () -> Unit = {}
+) {
 
     // ---- Siswa ----
 
@@ -24,7 +27,7 @@ class Repository(private val db: AppDatabase) {
     ): Long {
         require(nama.isNotBlank()) { "Nama tidak boleh kosong" }
         require(nis.isNotBlank()) { "NIS / kode barcode tidak boleh kosong" }
-        return db.siswaDao().insert(
+        val id = db.siswaDao().insert(
             SiswaEntity(
                 nama = nama.trim(),
                 nis = nis.trim(),
@@ -33,17 +36,39 @@ class Repository(private val db: AppDatabase) {
                 sesi = sesi.name
             )
         )
+        onMutasi()
+        return id
     }
 
     suspend fun ubahSiswa(e: SiswaEntity) {
         require(e.nama.isNotBlank()) { "Nama tidak boleh kosong" }
         require(e.nis.isNotBlank()) { "NIS / kode barcode tidak boleh kosong" }
-        db.siswaDao().update(e)
+        db.siswaDao().update(e.copy(synced = false))
+        onMutasi()
     }
 
-    suspend fun nonaktifkanSiswa(id: Long) = db.siswaDao().nonaktifkan(id)
+    suspend fun nonaktifkanSiswa(id: Long) {
+        db.siswaDao().nonaktifkan(id)
+        onMutasi()
+    }
 
-    suspend fun aktifkanSiswa(id: Long) = db.siswaDao().aktifkan(id)
+    suspend fun aktifkanSiswa(id: Long) {
+        db.siswaDao().aktifkan(id)
+        onMutasi()
+    }
+
+    /** Import daftar siswa hasil parse CSV. Mengembalikan (berhasil, duplikat). */
+    suspend fun importSiswa(daftar: List<BarisCsvSiswa>): Pair<Int, Int> {
+        var berhasil = 0
+        var duplikat = 0
+        for (item in daftar) {
+            val ok = runCatching {
+                tambahSiswa(item.nama, item.nis, item.kelas, item.noWaOrtu, item.sesi)
+            }.isSuccess
+            if (ok) berhasil++ else duplikat++
+        }
+        return berhasil to duplikat
+    }
 
     // ---- Absen ----
 
@@ -64,11 +89,13 @@ class Repository(private val db: AppDatabase) {
             val id = dao.insert(
                 AbsensiEntity(siswaId = siswa.id, tanggal = tanggal, masukMenit = sekarangMenit)
             )
+            onMutasi()
             return AbsensiEntity(id = id, siswaId = siswa.id, tanggal = tanggal, masukMenit = sekarangMenit)
         }
         if (ada.pulangMenit == null) {
-            val upd = ada.copy(pulangMenit = sekarangMenit)
+            val upd = ada.copy(pulangMenit = sekarangMenit, synced = false)
             dao.update(upd)
+            onMutasi()
             return upd
         }
         return ada
@@ -148,6 +175,8 @@ class Repository(private val db: AppDatabase) {
         }
     }
 
+    suspend fun jumlahBelumSync(): Int = db.absensiDao().jumlahBelumSync()
+
     // ---- Izin ----
 
     suspend fun catatIzin(siswaId: Long, tanggal: String, jenis: String, keterangan: String = "") {
@@ -155,6 +184,7 @@ class Repository(private val db: AppDatabase) {
         db.izinDao().insert(
             IzinEntity(siswaId = siswaId, tanggal = tanggal, jenis = jenis, keterangan = keterangan.trim())
         )
+        onMutasi()
     }
 
     suspend fun hapusIzin(siswaId: Long, tanggal: String) = db.izinDao().hapus(siswaId, tanggal)
@@ -175,8 +205,10 @@ class Repository(private val db: AppDatabase) {
         }
         if (ada == null) {
             dao.insert(AbsensiEntity(siswaId = siswaId, tanggal = tanggal, masukMenit = masukMenit, pulangMenit = pulangMenit))
+            onMutasi()
         } else {
-            dao.update(ada.copy(masukMenit = masukMenit, pulangMenit = pulangMenit))
+            dao.update(ada.copy(masukMenit = masukMenit, pulangMenit = pulangMenit, synced = false))
+            onMutasi()
         }
     }
 

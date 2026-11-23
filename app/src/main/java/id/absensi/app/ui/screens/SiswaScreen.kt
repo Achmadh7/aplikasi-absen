@@ -1,5 +1,7 @@
 package id.absensi.app.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -22,10 +25,12 @@ import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PersonOff
 import androidx.compose.material.icons.filled.QrCode2
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -46,6 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -53,19 +59,27 @@ import id.absensi.app.data.JamSekolah
 import id.absensi.app.data.Repository
 import id.absensi.app.data.SiswaEntity
 import id.absensi.app.data.formatTanggalIndonesia
+import id.absensi.app.data.parseCsvSiswa
 import id.absensi.app.data.tanggalHariIni
+import id.absensi.app.ui.FilterCariKelas
 import id.absensi.app.ui.KacaCard
 import id.absensi.app.ui.buatQrBitmap
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SiswaScreen(repo: Repository) {
+fun SiswaScreen(repo: Repository, onPesan: (String) -> Unit = {}) {
+    val context = LocalContext.current
     var daftar by remember { mutableStateOf<List<SiswaEntity>>(emptyList()) }
+    var cari by remember { mutableStateOf("") }
+    var kelasDipilih by remember { mutableStateOf<String?>(null) }
     var dialogTambah by remember { mutableStateOf(false) }
+    var dialogImport by remember { mutableStateOf(false) }
     var editTarget by remember { mutableStateOf<SiswaEntity?>(null) }
     var izinTarget by remember { mutableStateOf<SiswaEntity?>(null) }
     var qrTarget by remember { mutableStateOf<SiswaEntity?>(null) }
@@ -78,33 +92,107 @@ fun SiswaScreen(repo: Repository) {
 
     LaunchedEffect(Unit) { muat() }
 
+    val launcherImport = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val teks = withContext(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+                }.getOrNull()
+            }
+            if (teks == null) {
+                onPesan("Gagal membaca file CSV.")
+                return@launch
+            }
+            val hasil = parseCsvSiswa(teks)
+            if (hasil.valid.isEmpty()) {
+                onPesan("Tidak ada data valid di CSV.")
+                return@launch
+            }
+            val (berhasil, duplikat) = repo.importSiswa(hasil.valid)
+            muat()
+            val ringkas = buildList {
+                add("$berhasil masuk")
+                if (duplikat > 0) add("$duplikat duplikat")
+                if (hasil.dilewati > 0) add("${hasil.dilewati} dilewati")
+            }.joinToString(", ")
+            onPesan("Import CSV: $ringkas.")
+        }
+    }
+
+    val daftarKelas = remember(daftar) {
+        daftar.map { it.kelas.trim() }.filter { it.isNotBlank() }.distinct().sorted()
+    }
+    val daftarTampil = remember(daftar, cari, kelasDipilih) {
+        val q = cari.trim()
+        daftar.filter { s ->
+            val cocokKelas = kelasDipilih == null || s.kelas.trim() == kelasDipilih
+            val cocokCari = q.isEmpty() ||
+                s.nama.contains(q, ignoreCase = true) ||
+                s.nis.contains(q, ignoreCase = true) ||
+                s.kelas.contains(q, ignoreCase = true)
+            cocokKelas && cocokCari
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            Text(
-                text = "Siswa",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.ExtraBold
-            )
-            Text(
-                text = "${daftar.count { it.aktif }} aktif • ${daftar.size} total",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        text = "Siswa",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Text(
+                        text = "${daftar.count { it.aktif }} aktif • ${daftar.size} total",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                FilledTonalButton(onClick = { dialogImport = true }) {
+                    Icon(Icons.Filled.UploadFile, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Import CSV")
+                }
+            }
             Spacer(Modifier.height(12.dp))
             if (daftar.isEmpty()) {
                 KacaCard(Modifier.fillMaxWidth()) {
                     Text(
-                        text = "Belum ada siswa. Ketuk tombol + untuk menambah.",
+                        text = "Belum ada siswa. Ketuk tombol + atau Import CSV.",
                         modifier = Modifier.padding(16.dp)
                     )
                 }
             } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    items(daftar, key = { it.id }) { s ->
+                FilterCariKelas(
+                    cari = cari,
+                    onCariChange = { cari = it },
+                    daftarKelas = daftarKelas,
+                    kelasDipilih = kelasDipilih,
+                    onKelasChange = { kelasDipilih = it }
+                )
+                Spacer(Modifier.height(8.dp))
+                if (daftarTampil.isEmpty()) {
+                    KacaCard(Modifier.fillMaxWidth()) {
+                        Text(
+                            text = "Tidak ada siswa yang cocok.",
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
+                } else {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        items(daftarTampil, key = { it.id }) { s ->
                         KacaCard(Modifier.fillMaxWidth()) {
                             Row(
                                 modifier = Modifier.padding(12.dp),
@@ -175,6 +263,7 @@ fun SiswaScreen(repo: Repository) {
                 }
             }
         }
+        }
         FloatingActionButton(
             onClick = { dialogTambah = true },
             modifier = Modifier
@@ -244,6 +333,39 @@ fun SiswaScreen(repo: Repository) {
             },
             confirmButton = {
                 TextButton(onClick = { qrTarget = null }) { Text("Tutup") }
+            }
+        )
+    }
+
+    if (dialogImport) {
+        AlertDialog(
+            onDismissRequest = { dialogImport = false },
+            title = { Text("Import Siswa dari CSV") },
+            text = {
+                Text(
+                    "Urutan kolom CSV:\n" +
+                        "nama,nis,kelas,no_wa_ortu,sesi\n\n" +
+                        "Contoh:\n" +
+                        "Budi Santoso,2026001,7A,081234567890,PAGI\n\n" +
+                        "Catatan: pemisah koma (,) atau titik koma (;), baris header opsional, sesi default PAGI, NIS duplikat otomatis dilewati."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    dialogImport = false
+                    launcherImport.launch(
+                        arrayOf(
+                            "text/csv",
+                            "text/comma-separated-values",
+                            "text/plain",
+                            "application/vnd.ms-excel",
+                            "*/*"
+                        )
+                    )
+                }) { Text("Pilih File CSV") }
+            },
+            dismissButton = {
+                TextButton(onClick = { dialogImport = false }) { Text("Batal") }
             }
         )
     }

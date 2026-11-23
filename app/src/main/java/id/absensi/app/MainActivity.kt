@@ -50,9 +50,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import id.absensi.app.data.DatabaseProvider
 import id.absensi.app.data.Repository
+import id.absensi.app.data.SupabaseClient
+import id.absensi.app.data.SyncWorker
 import id.absensi.app.ui.screens.AbsenScreen
 import id.absensi.app.ui.screens.RekapScreen
 import id.absensi.app.ui.screens.RiwayatSiswaScreen
+import id.absensi.app.ui.screens.ScanBarcodeScreen
 import id.absensi.app.ui.screens.SiswaScreen
 import id.absensi.app.ui.theme.AbsensiTheme
 import id.absensi.app.ui.theme.AuroraBackground
@@ -78,12 +81,17 @@ private fun AbsensiApp(prefs: SharedPreferences) {
     val toleransi = remember { prefs.getInt("toleransi", 15) }
     var tab by remember { mutableIntStateOf(0) }
     var riwayatTarget by remember { mutableStateOf<Pair<Long, String>?>(null) }
+    var bukaScanner by remember { mutableStateOf(false) }
+    var autoBukaWa by remember { mutableStateOf(false) }
     var repo by remember { mutableStateOf<Repository?>(null) }
     var notifAbsen by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         val db = DatabaseProvider.init(context)
-        repo = Repository(db)
+        repo = Repository(db) { SyncWorker.enqueue(context) }
+        if (SupabaseClient(context).prefs.isConfigured) {
+            SyncWorker.enqueue(context)
+        }
     }
 
     LaunchedEffect(notifAbsen) {
@@ -98,7 +106,7 @@ private fun AbsensiApp(prefs: SharedPreferences) {
             Scaffold(
                 containerColor = Color.Transparent,
                 bottomBar = {
-                    if (riwayatTarget == null) {
+                    if (riwayatTarget == null && !bukaScanner) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -173,10 +181,33 @@ private fun AbsensiApp(prefs: SharedPreferences) {
                                 onBack = { riwayatTarget = null },
                                 onPesan = { notifAbsen = it }
                             )
+                            bukaScanner -> ScanBarcodeScreen(
+                                repo = r,
+                                toleransiMenit = toleransi,
+                                autoBukaWa = autoBukaWa,
+                                onAutoBukaWaChange = { autoBukaWa = it },
+                                onBack = { bukaScanner = false },
+                                onPesan = { notifAbsen = it }
+                            )
                             else -> when (tab) {
-                                0 -> AbsenScreen(r, toleransi) { notifAbsen = it }
-                                1 -> RekapScreen(r, toleransi) { sid, pref -> riwayatTarget = sid to pref }
-                                else -> SiswaScreen(r)
+                                0 -> AbsenScreen(
+                                    repo = r,
+                                    toleransiMenit = toleransi,
+                                    autoBukaWa = autoBukaWa,
+                                    onAutoBukaWaChange = { autoBukaWa = it },
+                                    onBukaScanner = { bukaScanner = true },
+                                    onPesan = { notifAbsen = it }
+                                )
+                                1 -> RekapScreen(
+                                    repo = r,
+                                    toleransiMenit = toleransi,
+                                    onSiswa = { sid, pref -> riwayatTarget = sid to pref },
+                                    onPesan = { notifAbsen = it }
+                                )
+                                else -> SiswaScreen(
+                                    repo = r,
+                                    onPesan = { notifAbsen = it }
+                                )
                             }
                         }
                     }
